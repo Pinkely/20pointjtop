@@ -1,328 +1,293 @@
-<h2 class="sr-only">Real-time Encrypted Packet Visualization Dashboard — แดชบอร์ดแสดงสถิติแพ็กเก็ตเครือข่ายแบบ real-time
-</h2>
+<h2 class="sr-only">Real-time Encrypted Packet Visualization Dashboard — แดชบอร์ดแสดงสถิติแพ็กเก็ตเครือข่ายแบบ real-time</h2>
 
 <style>
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); }
+  .dash { padding: 16px; }
 
-  body {
-    font-family: var(--font-sans);
-  }
-
-  .dash {
-    padding: 16px;
-  }
-
+  /* ─── Topbar ─────────────────────────────────────────────── */
   .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 16px;
+    display: flex; align-items: center;
+    justify-content: space-between; margin-bottom: 16px;
+    flex-wrap: wrap; gap: 8px;
   }
-
-  .topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .logo {
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--color-text-primary);
-  }
-
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .logo { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
   .badge-live {
-    background: #e24b4a;
-    color: #fff;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
+    background: #e24b4a; color: #fff; font-size: 11px;
+    padding: 2px 8px; border-radius: 20px;
+    display: flex; align-items: center; gap: 4px;
   }
-
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #fff;
-    animation: blink 1s infinite;
-  }
-
-  @keyframes blink {
-
-    0%,
-    100% {
-      opacity: 1
-    }
-
-    50% {
-      opacity: .3
-    }
-  }
-
-  .topbar-right {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-
+  .dot { width:6px; height:6px; border-radius:50%; background:#fff; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .topbar-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .badge-iface {
     background: var(--color-background-secondary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: var(--border-radius-md);
-    padding: 4px 10px;
-    font-size: 12px;
-    color: var(--color-text-secondary);
+    padding: 4px 10px; font-size: 12px; color: var(--color-text-secondary);
   }
-
   .btn-stop {
-    background: transparent;
-    border: 0.5px solid var(--color-border-secondary);
-    border-radius: var(--border-radius-md);
-    padding: 5px 14px;
-    font-size: 13px;
-    cursor: pointer;
-    color: var(--color-text-primary);
+    background: transparent; border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md); padding: 5px 14px;
+    font-size: 13px; cursor: pointer; color: var(--color-text-primary);
   }
-
-  .btn-stop:hover {
-    background: var(--color-background-secondary);
+  .btn-stop:hover { background: var(--color-background-secondary); }
+  .btn-promiscuous {
+    background: transparent; border: 0.5px solid #ba7517;
+    border-radius: var(--border-radius-md); padding: 5px 12px;
+    font-size: 12px; cursor: pointer; color: #ba7517; transition: all .2s;
   }
+  .btn-promiscuous.active { background: #ba7517; color: #fff; }
+  .btn-promiscuous:hover { opacity: .85; }
 
+  /* ─── Metrics ────────────────────────────────────────────── */
   .metrics {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin-bottom: 14px;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px; margin-bottom: 14px;
   }
+  .metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 14px; }
+  .metric-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .metric-val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+  .metric-sub { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+  .metric-val.green { color: #1d9e75; }
+  .metric-val.red { color: #e24b4a; }
+  .metric-val.amber { color: #ba7517; }
 
-  .metric-card {
-    background: var(--color-background-secondary);
-    border-radius: var(--border-radius-md);
-    padding: 12px 14px;
-  }
-
-  .metric-label {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-  }
-
-  .metric-val {
-    font-size: 22px;
-    font-weight: 500;
-    color: var(--color-text-primary);
-  }
-
-  .metric-sub {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    margin-top: 2px;
-  }
-
-  .metric-val.green {
-    color: #1d9e75;
-  }
-
-  .metric-val.red {
-    color: #e24b4a;
-  }
-
-  .metric-val.amber {
-    color: #ba7517;
-  }
-
-  .charts-row {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-
+  /* ─── Charts ─────────────────────────────────────────────── */
+  .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px; }
   .chart-card {
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
-    border-radius: var(--border-radius-lg);
-    padding: 14px 16px;
+    border-radius: var(--border-radius-lg); padding: 14px 16px;
   }
+  .chart-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 12px; }
+  .charts-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 
-  .chart-title {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--color-text-primary);
-    margin-bottom: 12px;
+  /* ─── Alerts panel ───────────────────────────────────────── */
+  .alerts-scroll { max-height: 200px; overflow-y: auto; }
+  .alert-row {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 12px; border-radius: var(--border-radius-md);
+    margin-bottom: 6px; font-size: 12px;
   }
+  .alert-warn { background: #faeeda; color: #854f0b; }
+  .alert-danger { background: #fcebeb; color: #a32d2d; }
+  .alert-info { background: #e6f1fb; color: #185fa5; }
+  .alert-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .alert-time { font-size: 10px; opacity: .65; margin-top: 2px; }
+  .alert-dismiss { margin-left: auto; cursor: pointer; opacity: .5; flex-shrink: 0; font-size: 12px; }
+  .alert-dismiss:hover { opacity: 1; }
 
-  .charts-row2 {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 12px;
-  }
-
-  .table-card {
+  /* ─── Security alerts panel (beside unencrypted metric) ─── */
+  .sec-alerts-panel {
     background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
     border-radius: var(--border-radius-lg);
-    padding: 14px 16px;
-    margin-bottom: 12px;
+    padding: 14px 16px; margin-bottom: 12px;
   }
-
-  .table-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
+  .sec-alerts-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .sec-alerts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .sec-alert-card {
+    border-radius: var(--border-radius-md); padding: 10px 12px;
+    border-left: 3px solid transparent;
   }
+  .sec-alert-card.danger { background:#fcebeb; border-left-color:#e24b4a; }
+  .sec-alert-card.warn   { background:#faeeda; border-left-color:#ba7517; }
+  .sec-alert-card-title  { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+  .sec-alert-card.danger .sec-alert-card-title { color:#a32d2d; }
+  .sec-alert-card.warn   .sec-alert-card-title { color:#854f0b; }
+  .sec-alert-card-body   { font-size: 11px; color: var(--color-text-secondary); }
+  .sec-alert-counter     { font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .sec-alert-card.danger .sec-alert-counter { color:#e24b4a; }
+  .sec-alert-card.warn   .sec-alert-counter { color:#ba7517; }
 
-  .filter-row {
-    display: flex;
-    gap: 6px;
-  }
-
-  .filter-btn {
-    background: transparent;
+  /* ─── Filter bubble popup ────────────────────────────────── */
+  .table-card {
+    background: var(--color-background-primary);
     border: 0.5px solid var(--color-border-tertiary);
-    border-radius: var(--border-radius-md);
-    padding: 3px 10px;
-    font-size: 11px;
-    cursor: pointer;
-    color: var(--color-text-secondary);
+    border-radius: var(--border-radius-lg); padding: 14px 16px; margin-bottom: 12px;
   }
-
+  .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .filter-btn {
+    background: transparent; border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md); padding: 3px 10px;
+    font-size: 11px; cursor: pointer; color: var(--color-text-secondary);
+  }
   .filter-btn.active {
-    background: var(--color-background-info);
-    color: var(--color-text-info);
-    border-color: var(--color-border-info);
+    background: var(--color-background-info); color: var(--color-text-info); border-color: var(--color-border-info);
   }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
+  .btn-adv-filter {
+    background: transparent; border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md); padding: 3px 10px;
+    font-size: 11px; cursor: pointer; color: var(--color-text-primary);
+    display: flex; align-items: center; gap: 4px;
   }
+  .btn-adv-filter:hover { background: var(--color-background-secondary); }
 
+  /* ─── Advanced filter bubble ─────────────────────────────── */
+  .adv-filter-overlay {
+    display: none; position: fixed; inset: 0; z-index: 999;
+  }
+  .adv-filter-overlay.open { display: block; }
+  .adv-filter-bubble {
+    position: fixed; z-index: 1000;
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 12px; padding: 18px;
+    width: 340px; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+  }
+  .adv-filter-title { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--color-text-primary); }
+  .adv-filter-row { margin-bottom: 10px; }
+  .adv-filter-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .adv-filter-input {
+    width: 100%; background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-md); padding: 6px 10px;
+    font-size: 12px; color: var(--color-text-primary);
+  }
+  .adv-filter-input:focus { outline: none; border-color: var(--color-border-info); }
+  .adv-filter-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+  .btn-apply {
+    background: #378add; color: #fff; border: none;
+    border-radius: var(--border-radius-md); padding: 6px 16px;
+    font-size: 12px; cursor: pointer;
+  }
+  .btn-apply:hover { opacity: .9; }
+  .btn-clear-filter {
+    background: transparent; border: 0.5px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md); padding: 6px 12px;
+    font-size: 12px; cursor: pointer; color: var(--color-text-secondary);
+  }
+  .active-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .active-filter-tag {
+    background: #e6f1fb; color: #185fa5; border-radius: 20px;
+    padding: 2px 10px; font-size: 10px; display: flex; align-items: center; gap: 4px;
+  }
+  .active-filter-tag span { cursor: pointer; opacity: .7; }
+  .active-filter-tag span:hover { opacity: 1; }
+
+  /* ─── Settings panel ─────────────────────────────────────── */
+  .settings-panel {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--border-radius-lg); padding: 14px 16px; margin-bottom: 12px;
+  }
+  .settings-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .settings-group { display: flex; flex-direction: column; gap: 4px; }
+  .settings-label { font-size: 11px; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: .04em; }
+  .slider-row { display: flex; align-items: center; gap: 10px; }
+  .buffer-slider { -webkit-appearance: none; width: 180px; height: 4px; border-radius: 2px; background: var(--color-border-tertiary); outline: none; cursor: pointer; }
+  .buffer-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #378add; cursor: pointer; }
+  .slider-val { font-size: 12px; font-weight: 500; color: var(--color-text-primary); min-width: 60px; }
+
+  /* ─── Table ──────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th {
-    text-align: left;
-    color: var(--color-text-secondary);
-    font-weight: 400;
-    padding: 4px 8px;
-    border-bottom: 0.5px solid var(--color-border-tertiary);
-    font-size: 11px;
+    text-align: left; color: var(--color-text-secondary); font-weight: 400;
+    padding: 4px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 11px;
   }
-
   td {
-    padding: 6px 8px;
-    border-bottom: 0.5px solid var(--color-border-tertiary);
-    color: var(--color-text-primary);
-    font-family: var(--font-mono);
-    font-size: 11px;
+    padding: 6px 8px; border-bottom: 0.5px solid var(--color-border-tertiary);
+    color: var(--color-text-primary); font-family: var(--font-mono); font-size: 11px;
   }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--color-background-secondary); }
 
-  tr:last-child td {
-    border-bottom: none;
-  }
+  /* ─── Pills ──────────────────────────────────────────────── */
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 500; }
+  .pill-https { background:#e1f5ee; color:#0f6e56; }
+  .pill-http  { background:#fcebeb; color:#a32d2d; }
+  .pill-dns   { background:#e6f1fb; color:#185fa5; }
+  .pill-ssh   { background:#eeedfe; color:#3c3489; }
+  .pill-tcp   { background:#f1efe8; color:#5f5e5a; }
+  .pill-ftp   { background:#fff3e0; color:#8d4900; }
+  .pill-telnet{ background:#fde8f0; color:#8d1144; }
+  .pill-enc   { background:#eaf3de; color:#3b6d11; }
+  .pill-noenc { background:#fcebeb; color:#a32d2d; }
 
-  tr:hover td {
-    background: var(--color-background-secondary);
+  /* ─── Toast notification ─────────────────────────────────── */
+  #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+  .toast {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 10px; padding: 10px 14px;
+    font-size: 12px; min-width: 240px; max-width: 320px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    animation: slideIn .3s ease; pointer-events: all;
+    display: flex; gap: 10px; align-items: flex-start;
   }
-
-  .pill {
-    display: inline-block;
-    padding: 1px 7px;
-    border-radius: 10px;
-    font-size: 10px;
-    font-weight: 500;
-  }
-
-  .pill-https {
-    background: #e1f5ee;
-    color: #0f6e56;
-  }
-
-  .pill-http {
-    background: #fcebeb;
-    color: #a32d2d;
-  }
-
-  .pill-dns {
-    background: #e6f1fb;
-    color: #185fa5;
-  }
-
-  .pill-ssh {
-    background: #eeedfe;
-    color: #3c3489;
-  }
-
-  .pill-tcp {
-    background: #f1efe8;
-    color: #5f5e5a;
-  }
-
-  .pill-enc {
-    background: #eaf3de;
-    color: #3b6d11;
-  }
-
-  .pill-noenc {
-    background: #fcebeb;
-    color: #a32d2d;
-  }
-
-  .alert-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: var(--border-radius-md);
-    margin-bottom: 6px;
-    font-size: 12px;
-  }
-
-  .alert-warn {
-    background: #faeeda;
-    color: #854f0b;
-  }
-
-  .alert-danger {
-    background: #fcebeb;
-    color: #a32d2d;
-  }
-
-  .alert-info {
-    background: #e6f1fb;
-    color: #185fa5;
-  }
-
-  .alert-icon {
-    font-size: 14px;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
+  .toast.danger { border-left: 3px solid #e24b4a; }
+  .toast.warn   { border-left: 3px solid #ba7517; }
+  .toast.info   { border-left: 3px solid #378add; }
+  .toast-icon { font-size: 14px; flex-shrink: 0; }
+  .toast-body { flex: 1; }
+  .toast-title { font-weight: 600; margin-bottom: 2px; color: var(--color-text-primary); }
+  .toast-msg { color: var(--color-text-secondary); line-height: 1.4; }
+  @keyframes slideIn { from { opacity:0; transform: translateX(40px); } to { opacity:1; transform: translateX(0); } }
+  @keyframes slideOut { from { opacity:1; transform: translateX(0); } to { opacity:0; transform: translateX(40px); } }
 </style>
 
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Advanced filter overlay -->
+<div class="adv-filter-overlay" id="adv-overlay" onclick="closeAdvFilter(event)">
+  <div class="adv-filter-bubble" onclick="event.stopPropagation()">
+    <div class="adv-filter-title">🔍 กรองขั้นสูง</div>
+    <div class="adv-filter-row">
+      <div class="adv-filter-label">Protocol</div>
+      <select class="adv-filter-input" id="af-proto">
+        <option value="">ทั้งหมด</option>
+        <option value="HTTPS">HTTPS</option>
+        <option value="HTTP">HTTP</option>
+        <option value="DNS">DNS</option>
+        <option value="SSH">SSH</option>
+        <option value="FTP">FTP</option>
+        <option value="TELNET">TELNET</option>
+        <option value="TCP">TCP</option>
+        <option value="UDP">UDP</option>
+      </select>
+    </div>
+    <div class="adv-filter-row">
+      <div class="adv-filter-label">IP Address (src หรือ dst)</div>
+      <input class="adv-filter-input" id="af-ip" type="text" placeholder="เช่น 192.168.1.1">
+    </div>
+    <div class="adv-filter-row">
+      <div class="adv-filter-label">Port (dst)</div>
+      <input class="adv-filter-input" id="af-port" type="number" placeholder="เช่น 80, 443">
+    </div>
+    <div class="adv-filter-row">
+      <div class="adv-filter-label">ขนาด Packet สูงสุด (bytes)</div>
+      <input class="adv-filter-input" id="af-size" type="number" placeholder="เช่น 1500">
+    </div>
+    <div class="adv-filter-actions">
+      <button class="btn-clear-filter" onclick="clearAdvFilter()">ล้างตัวกรอง</button>
+      <button class="btn-apply" onclick="applyAdvFilter()">ใช้งาน</button>
+    </div>
+  </div>
+</div>
+
 <div class="dash">
+  <!-- Topbar -->
   <div class="topbar">
     <div class="topbar-left">
       <span class="logo">Packet Viz Dashboard</span>
       <span class="badge-live"><span class="dot"></span>LIVE</span>
     </div>
     <div class="topbar-right">
-      <span class="badge-iface">eth0</span>
+      <span class="badge-iface" id="iface-badge">eth0</span>
+      <button class="btn-promiscuous" id="btn-promisc" onclick="togglePromiscuous()" title="สลับโหมด Promiscuous">
+        📡 Promiscuous: OFF
+      </button>
       <span style="font-size:11px;color:var(--color-text-secondary)" id="clock"></span>
       <button class="btn-stop" onclick="toggleCapture(this)">หยุดดักจับ</button>
     </div>
   </div>
 
+  <!-- Metrics -->
   <div class="metrics">
     <div class="metric-card">
       <div class="metric-label">Packets/sec</div>
@@ -346,41 +311,102 @@
     </div>
   </div>
 
+  <!-- Security Alerts Panel (ข้าง ๆ ช่องไม่เข้ารหัส / featured section) -->
+  <div class="sec-alerts-panel">
+    <div class="sec-alerts-header">
+      <span class="chart-title" style="margin:0;">⚠️ การแจ้งเตือนความปลอดภัย</span>
+      <span style="font-size:11px;color:var(--color-text-secondary);">อัปเดต real-time</span>
+    </div>
+    <div class="sec-alerts-grid">
+      <!-- card 1: unencrypted protocols -->
+      <div class="sec-alert-card danger">
+        <div class="sec-alert-card-title">🔓 การสื่อสารไม่เข้ารหัส</div>
+        <div class="sec-alert-card-body">พบ HTTP / FTP / TELNET</div>
+        <div class="sec-alert-counter" id="sec-noenc-count">0</div>
+        <div style="font-size:10px;color:#a32d2d;margin-top:2px;">แพ็กเก็ตในช่วงนี้</div>
+        <div style="margin-top:8px;font-size:11px;color:#a32d2d;" id="sec-noenc-detail">—</div>
+      </div>
+      <!-- card 2: vulnerable protocols -->
+      <div class="sec-alert-card warn">
+        <div class="sec-alert-card-title">🛡️ Protocol ที่มีช่องโหว่</div>
+        <div class="sec-alert-card-body">TELNET, FTP, HTTP ล้วนส่งข้อมูลเป็น plaintext</div>
+        <div class="sec-alert-counter" id="sec-vuln-count">0</div>
+        <div style="font-size:10px;color:#854f0b;margin-top:2px;">แพ็กเก็ตมีความเสี่ยง</div>
+        <div style="margin-top:8px;font-size:11px;color:#854f0b;" id="sec-vuln-detail">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel">
+    <div style="font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:12px;">⚙️ การตั้งค่าการดักจับ</div>
+    <div class="settings-row">
+      <div class="settings-group">
+        <div class="settings-label">Buffer Size (packets/sec)</div>
+        <div class="slider-row">
+          <input type="range" class="buffer-slider" id="buffer-slider"
+            min="1000" max="10000" step="500" value="5000"
+            oninput="onBufferChange(this.value)">
+          <span class="slider-val" id="buffer-val">5,000 p/s</span>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">โหมดการดักจับ</div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:12px;color:var(--color-text-primary);display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="radio" name="capture-mode" value="normal" checked onchange="onCaptureModeChange('normal')">
+            <span>Normal (เฉพาะเครื่องนี้)</span>
+          </label>
+          <label style="font-size:12px;color:var(--color-text-primary);display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="radio" name="capture-mode" value="promiscuous" onchange="onCaptureModeChange('promiscuous')">
+            <span>Promiscuous (ทั้งเครือข่าย)</span>
+          </label>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">Buffer ที่ใช้งานอยู่</div>
+        <div style="font-size:12px;color:var(--color-text-primary);" id="buffer-status">5,000 p/s · Normal Mode</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts row 1 -->
   <div class="charts-row">
     <div class="chart-card">
       <div class="chart-title">ปริมาณแพ็กเก็ต (Real-time)</div>
-      <div style="position:relative;height:180px;"><canvas id="lineChart" role="img"
-          aria-label="กราฟเส้นแสดงปริมาณแพ็กเก็ตต่อวินาทีแบบ real-time">กราฟแสดงจำนวนแพ็กเก็ตต่อวินาที</canvas></div>
+      <div style="position:relative;height:180px;">
+        <canvas id="lineChart" role="img" aria-label="กราฟเส้นแสดงปริมาณแพ็กเก็ตต่อวินาทีแบบ real-time">กราฟแสดงจำนวนแพ็กเก็ตต่อวินาที</canvas>
+      </div>
     </div>
     <div class="chart-card">
       <div class="chart-title">สัดส่วนการเข้ารหัส</div>
-      <div style="position:relative;height:130px;margin-bottom:8px;"><canvas id="donutChart" role="img"
-          aria-label="กราฟโดนัทแสดงสัดส่วน Encrypted vs Unencrypted">กราฟแสดงสัดส่วนการเข้ารหัส</canvas></div>
+      <div style="position:relative;height:130px;margin-bottom:8px;">
+        <canvas id="donutChart" role="img" aria-label="กราฟโดนัทแสดงสัดส่วน Encrypted vs Unencrypted">กราฟแสดงสัดส่วนการเข้ารหัส</canvas>
+      </div>
       <div style="display:flex;gap:12px;justify-content:center;font-size:11px;color:var(--color-text-secondary);">
-        <span style="display:flex;align-items:center;gap:4px;"><span
-            style="width:10px;height:10px;border-radius:2px;background:#1d9e75;display:inline-block;"></span>Encrypted</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span
-            style="width:10px;height:10px;border-radius:2px;background:#e24b4a;display:inline-block;"></span>Unencrypted</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#1d9e75;display:inline-block;"></span>Encrypted</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#e24b4a;display:inline-block;"></span>Unencrypted</span>
       </div>
     </div>
   </div>
 
+  <!-- Charts row 2 -->
   <div class="charts-row2">
     <div class="chart-card">
       <div class="chart-title">โปรโตคอล</div>
-      <div style="position:relative;height:160px;"><canvas id="barChart" role="img"
-          aria-label="กราฟแท่งแสดงสัดส่วนแต่ละโปรโตคอล">สัดส่วนโปรโตคอล HTTPS TCP DNS SSH HTTP</canvas></div>
+      <div style="position:relative;height:160px;">
+        <canvas id="barChart" role="img" aria-label="กราฟแท่งแสดงสัดส่วนแต่ละโปรโตคอล">สัดส่วนโปรโตคอล HTTPS TCP DNS SSH HTTP</canvas>
+      </div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">การแจ้งเตือนความปลอดภัย</div>
-      <div id="alerts-box">
-        <div class="alert-info"><span class="alert-icon">ℹ</span>
-          <div>กำลังรอข้อมูล...</div>
-        </div>
+      <div class="chart-title">การแจ้งเตือน (Log)</div>
+      <div class="alerts-scroll" id="alerts-box">
+        <div class="alert-info alert-row"><span class="alert-icon">ℹ</span><div>กำลังรอข้อมูล...</div></div>
       </div>
     </div>
   </div>
 
+  <!-- Packet Table -->
   <div class="table-card">
     <div class="table-header">
       <span class="chart-title" style="margin:0;">แพ็กเก็ตล่าสุด</span>
@@ -390,20 +416,18 @@
         <button class="filter-btn" onclick="setFilter('HTTP',this)">HTTP</button>
         <button class="filter-btn" onclick="setFilter('DNS',this)">DNS</button>
         <button class="filter-btn" onclick="setFilter('SSH',this)">SSH</button>
+        <button class="filter-btn" onclick="setFilter('FTP',this)">FTP</button>
+        <button class="filter-btn" onclick="setFilter('TELNET',this)">TELNET</button>
+        <button class="btn-adv-filter" onclick="openAdvFilter()">⚙ กรองขั้นสูง</button>
       </div>
     </div>
+    <!-- Active filter tags -->
+    <div class="active-filters" id="active-filter-tags"></div>
     <table>
       <thead>
         <tr>
-          <th>#</th>
-          <th>เวลา</th>
-          <th>Source IP</th>
-          <th>Dest IP</th>
-          <th>Protocol</th>
-          <th>Port</th>
-          <th>ขนาด (bytes)</th>
-          <th>TLS</th>
-          <th>สถานะ</th>
+          <th>#</th><th>เวลา</th><th>Source IP</th><th>Dest IP</th>
+          <th>Protocol</th><th>Port</th><th>ขนาด (bytes)</th><th>TLS</th><th>สถานะ</th>
         </tr>
       </thead>
       <tbody id="packet-table"></tbody>
@@ -414,90 +438,128 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
+  // ─── State ────────────────────────────────────────────────
   let running = false;
   let totalPkts = 0, encPkts = 0, noencPkts = 0;
   let currentFilter = 'ALL';
   let packets = [];
   const MAX_ROWS = 20;
+  let promiscuousMode = false;
+  let bufferSize = 5000;
 
+  // Advanced filter state
+  let advFilter = { proto: '', ip: '', port: '', size: '' };
+
+  // Security counters
+  let secNoencCount = 0; // HTTP + FTP + TELNET packets
+  let secVulnCount  = 0; // same but tracked separately for clarity
+  const secNoencProtos = new Set(['HTTP','FTP','TELNET']);
+  const VULN_PROTO_INFO = {
+    HTTP:   'HTTP ส่งข้อมูลเป็น plaintext — ควรใช้ HTTPS',
+    FTP:    'FTP ส่ง credentials ไม่เข้ารหัส — ควรใช้ SFTP',
+    TELNET: 'TELNET ไม่มีการเข้ารหัสเลย — ควรใช้ SSH',
+  };
+  let secNoencByProto = {};
+
+  // Dedup toast: ป้องกัน toast ซ้ำในช่วง 5 วิ
+  const recentToasts = {};
+
+  // ─── Charts setup ─────────────────────────────────────────
   const lineLabels = Array.from({ length: 30 }, () => '');
-  const lineData = Array.from({ length: 30 }, () => 0);
+  const lineData   = Array.from({ length: 30 }, () => 0);
 
-  const lineCtx = document.getElementById('lineChart').getContext('2d');
-  const lineChart = new Chart(lineCtx, {
+  const lineChart = new Chart(document.getElementById('lineChart').getContext('2d'), {
     type: 'line',
-    data: {
-      labels: lineLabels, datasets: [{
-        label: 'Packets/sec',
-        data: lineData,
-        borderColor: '#378add',
-        backgroundColor: 'rgba(55,138,221,0.08)',
-        borderWidth: 1.5,
-        pointRadius: 0,
-        fill: true,
-        tension: 0.4
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { display: false }, grid: { color: 'rgba(128,128,128,0.1)' } },
-        y: { min: 0, ticks: { font: { size: 10 } }, grid: { color: 'rgba(128,128,128,0.1)' } }
-      }
-    }
+    data: { labels: lineLabels, datasets: [{ label:'Packets/sec', data:lineData, borderColor:'#378add', backgroundColor:'rgba(55,138,221,0.08)', borderWidth:1.5, pointRadius:0, fill:true, tension:.4 }] },
+    options: { responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{display:false},grid:{color:'rgba(128,128,128,0.1)'}}, y:{min:0,ticks:{font:{size:10}},grid:{color:'rgba(128,128,128,0.1)'}} } }
   });
 
-  const donutCtx = document.getElementById('donutChart').getContext('2d');
-  const donutChart = new Chart(donutCtx, {
+  const donutChart = new Chart(document.getElementById('donutChart').getContext('2d'), {
     type: 'doughnut',
-    data: { labels: ['Encrypted', 'Unencrypted'], datasets: [{ data: [1, 1], backgroundColor: ['#1d9e75', '#e24b4a'], borderWidth: 0 }] },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: false,
-      plugins: { legend: { display: false } },
-      cutout: '70%'
-    }
+    data: { labels:['Encrypted','Unencrypted'], datasets:[{data:[1,1],backgroundColor:['#1d9e75','#e24b4a'],borderWidth:0}] },
+    options: { responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false}}, cutout:'70%' }
   });
 
-  const barCtx = document.getElementById('barChart').getContext('2d');
-  const barChart = new Chart(barCtx, {
+  const barChart = new Chart(document.getElementById('barChart').getContext('2d'), {
     type: 'bar',
-    data: {
-      labels: ['HTTPS', 'HTTP', 'DNS', 'SSH', 'TCP'],
-      datasets: [{ data: [0, 0, 0, 0, 0], backgroundColor: ['#1d9e75', '#e24b4a', '#378add', '#534ab7', '#888780'], borderRadius: 3, borderWidth: 0 }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      animation: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { font: { size: 10 } }, grid: { display: false } },
-        y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(128,128,128,0.1)' } }
-      }
-    }
+    data: { labels:['HTTPS','HTTP','DNS','SSH','TCP','FTP','TELNET'], datasets:[{data:[0,0,0,0,0,0,0], backgroundColor:['#1d9e75','#e24b4a','#378add','#534ab7','#888780','#e07b39','#c0396e'], borderRadius:3, borderWidth:0}] },
+    options: { responsive:true, maintainAspectRatio:false, animation:false, plugins:{legend:{display:false}},
+      scales:{ x:{ticks:{font:{size:9}},grid:{display:false}}, y:{ticks:{font:{size:10}},grid:{color:'rgba(128,128,128,0.1)'}} } }
   });
 
-  function updateClock() {
-    document.getElementById('clock').textContent = new Date().toLocaleTimeString('th-TH');
-  }
-  setInterval(updateClock, 1000);
-  updateClock();
+  // ─── Clock ────────────────────────────────────────────────
+  function updateClock() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('th-TH'); }
+  setInterval(updateClock, 1000); updateClock();
 
+  // ─── Protocol pill class ──────────────────────────────────
   function protoClass(p) {
-    const m = { HTTPS: 'pill-https', HTTP: 'pill-http', DNS: 'pill-dns', SSH: 'pill-ssh', TCP: 'pill-tcp' };
+    const m = { HTTPS:'pill-https', HTTP:'pill-http', DNS:'pill-dns', SSH:'pill-ssh', TCP:'pill-tcp', FTP:'pill-ftp', TELNET:'pill-telnet' };
     return m[p] || 'pill-tcp';
   }
 
+  // ─── Toast notification ───────────────────────────────────
+  function showToast(title, msg, type = 'warn', dedupKey = null) {
+    if (dedupKey) {
+      const now = Date.now();
+      if (recentToasts[dedupKey] && now - recentToasts[dedupKey] < 5000) return;
+      recentToasts[dedupKey] = now;
+    }
+    const container = document.getElementById('toast-container');
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    const icon = type === 'danger' ? '✕' : type === 'warn' ? '⚠' : 'ℹ';
+    el.innerHTML = `<span class="toast-icon">${icon}</span><div class="toast-body"><div class="toast-title">${title}</div><div class="toast-msg">${msg}</div></div>`;
+    container.appendChild(el);
+    setTimeout(() => {
+      el.style.animation = 'slideOut .3s ease forwards';
+      setTimeout(() => el.remove(), 300);
+    }, 4000);
+  }
+
+  // ─── Security alert detection ─────────────────────────────
+  function checkSecurityAlert(pkt) {
+    if (!pkt) return;
+
+    // 1) unencrypted protocol alert
+    if (secNoencProtos.has(pkt.protocol)) {
+      secNoencCount++;
+      secVulnCount++;
+      secNoencByProto[pkt.protocol] = (secNoencByProto[pkt.protocol] || 0) + 1;
+      updateSecAlerts();
+
+      // Toast — deduplicated per protocol per 5s
+      showToast(
+        `🔓 พบ ${pkt.protocol} ไม่เข้ารหัส`,
+        `${pkt.srcIP} → ${pkt.dstIP}:${pkt.dstPort} | ${VULN_PROTO_INFO[pkt.protocol] || ''}`,
+        pkt.protocol === 'TELNET' ? 'danger' : 'warn',
+        `noenc-${pkt.protocol}`
+      );
+    }
+
+    // 2) additional vulnerability checks (e.g. FTP active mode port 20)
+    if (pkt.protocol === 'FTP' && pkt.dstPort == 20) {
+      showToast('⚠ FTP Active Mode', `ตรวจพบ FTP data channel (port 20) จาก ${pkt.srcIP}`, 'warn', 'ftp-active');
+    }
+  }
+
+  function updateSecAlerts() {
+    document.getElementById('sec-noenc-count').textContent = secNoencCount.toLocaleString();
+    document.getElementById('sec-vuln-count').textContent = secVulnCount.toLocaleString();
+
+    // detail breakdown
+    const detail = Object.entries(secNoencByProto).map(([k,v]) => `${k}: ${v}`).join(' · ') || '—';
+    document.getElementById('sec-noenc-detail').textContent = detail;
+    document.getElementById('sec-vuln-detail').textContent = detail;
+  }
+
+  // ─── Alerts log box ───────────────────────────────────────
   function setAlertsBox(message, variant = 'info') {
-    const box = document.getElementById('alerts-box');
-    box.innerHTML = `
+    document.getElementById('alerts-box').innerHTML = `
       <div class="alert-row alert-${variant}">
-        <span class="alert-icon">${variant === 'danger' ? '✕' : variant === 'warn' ? '△' : 'ℹ'}</span>
+        <span class="alert-icon">${variant==='danger'?'✕':variant==='warn'?'△':'ℹ'}</span>
         <div>${message}</div>
-      </div>
-    `;
+      </div>`;
   }
 
   function addAlert(alert) {
@@ -506,20 +568,74 @@
     const wrapper = document.createElement('div');
     wrapper.className = `alert-row alert-${alert.type}`;
     wrapper.style.marginBottom = '6px';
+    const now = new Date().toLocaleTimeString('th-TH');
     wrapper.innerHTML = `
-      <span class="alert-icon">${alert.type === 'danger' ? '✕' : alert.type === 'warn' ? '△' : 'ℹ'}</span>
-      <div>${alert.message}</div>
-    `;
-
-    if (existing.length >= 3) {
-      existing[0].remove();
-    }
+      <span class="alert-icon">${alert.type==='danger'?'✕':alert.type==='warn'?'△':'ℹ'}</span>
+      <div>
+        <div>${alert.message}</div>
+        <div class="alert-time">${now}</div>
+      </div>
+      <span class="alert-dismiss" onclick="this.parentElement.remove()">✕</span>`;
+    if (existing.length >= 5) existing[0].remove();
     box.appendChild(wrapper);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // ─── Advanced filter ──────────────────────────────────────
+  function openAdvFilter() { document.getElementById('adv-overlay').classList.add('open'); }
+  function closeAdvFilter(e) {
+    if (!e || e.target === document.getElementById('adv-overlay'))
+      document.getElementById('adv-overlay').classList.remove('open');
+  }
+  function applyAdvFilter() {
+    advFilter.proto = document.getElementById('af-proto').value;
+    advFilter.ip    = document.getElementById('af-ip').value.trim();
+    advFilter.port  = document.getElementById('af-port').value.trim();
+    advFilter.size  = document.getElementById('af-size').value.trim();
+    document.getElementById('adv-overlay').classList.remove('open');
+    renderActiveFilterTags();
+    renderTable();
+  }
+  function clearAdvFilter() {
+    advFilter = { proto:'', ip:'', port:'', size:'' };
+    document.getElementById('af-proto').value = '';
+    document.getElementById('af-ip').value = '';
+    document.getElementById('af-port').value = '';
+    document.getElementById('af-size').value = '';
+    document.getElementById('adv-overlay').classList.remove('open');
+    renderActiveFilterTags();
+    renderTable();
+  }
+  function removeAdvFilterKey(key) {
+    advFilter[key] = '';
+    const inputMap = { proto:'af-proto', ip:'af-ip', port:'af-port', size:'af-size' };
+    document.getElementById(inputMap[key]).value = '';
+    renderActiveFilterTags();
+    renderTable();
+  }
+  function renderActiveFilterTags() {
+    const container = document.getElementById('active-filter-tags');
+    const labels = { proto:'Protocol', ip:'IP', port:'Port', size:'ขนาด ≤' };
+    container.innerHTML = Object.entries(advFilter)
+      .filter(([,v]) => v)
+      .map(([k,v]) => `<span class="active-filter-tag">${labels[k]}: ${v} <span onclick="removeAdvFilterKey('${k}')">✕</span></span>`)
+      .join('');
+  }
+
+  // ─── Table render ─────────────────────────────────────────
+  function matchesAdvFilter(p) {
+    if (advFilter.proto && p.protocol !== advFilter.proto) return false;
+    if (advFilter.ip && p.srcIP !== advFilter.ip && p.dstIP !== advFilter.ip) return false;
+    if (advFilter.port && String(p.dstPort) !== advFilter.port && String(p.srcPort) !== advFilter.port) return false;
+    if (advFilter.size && p.size > parseInt(advFilter.size)) return false;
+    return true;
   }
 
   function renderTable() {
     const tbody = document.getElementById('packet-table');
-    const filtered = currentFilter === 'ALL' ? packets : packets.filter(p => p.protocol === currentFilter);
+    let filtered = packets;
+    if (currentFilter !== 'ALL') filtered = filtered.filter(p => p.protocol === currentFilter);
+    filtered = filtered.filter(matchesAdvFilter);
     tbody.innerHTML = filtered.slice(0, MAX_ROWS).map(p => `
       <tr>
         <td>${p.id}</td>
@@ -531,79 +647,110 @@
         <td>${p.size}</td>
         <td>${p.tlsVersion || '-'}</td>
         <td><span class="pill ${p.encrypted ? 'pill-enc' : 'pill-noenc'}">${p.encrypted ? 'Encrypted' : 'Unencrypted'}</span></td>
-      </tr>
-    `).join('');
+      </tr>`).join('');
   }
 
+  // ─── Metrics update ───────────────────────────────────────
   function updateMetrics(stats) {
     totalPkts = stats.total || 0;
-    encPkts = stats.encrypted || 0;
+    encPkts   = stats.encrypted || 0;
     noencPkts = stats.unencrypted || 0;
-
-    document.getElementById('pps').textContent = stats.pps || 0;
-    document.getElementById('total').textContent = totalPkts.toLocaleString();
-    document.getElementById('enc-pct').textContent = (stats.encryptedPct || 0) + '%';
-    document.getElementById('noenc-pct').textContent = (100 - (stats.encryptedPct || 0)) + '%';
-    document.getElementById('enc-count').textContent = encPkts.toLocaleString() + ' แพ็กเก็ต';
+    document.getElementById('pps').textContent      = stats.pps || 0;
+    document.getElementById('total').textContent    = totalPkts.toLocaleString();
+    document.getElementById('enc-pct').textContent  = (stats.encryptedPct || 0) + '%';
+    document.getElementById('noenc-pct').textContent= (100 - (stats.encryptedPct || 0)) + '%';
+    document.getElementById('enc-count').textContent  = encPkts.toLocaleString() + ' แพ็กเก็ต';
     document.getElementById('noenc-count').textContent = noencPkts.toLocaleString() + ' แพ็กเก็ต';
   }
 
   function updateCharts(stats) {
-    lineData.push(stats.pps || 0);
-    lineData.shift();
+    lineData.push(stats.pps || 0); lineData.shift();
     lineChart.update('none');
-
     donutChart.data.datasets[0].data = [encPkts, noencPkts];
     donutChart.update('none');
-
-    const protocolData = ['HTTPS', 'HTTP', 'DNS', 'SSH', 'TCP'].map(k => stats.protocols?.[k] || 0);
+    const protocolData = ['HTTPS','HTTP','DNS','SSH','TCP','FTP','TELNET'].map(k => stats.protocols?.[k] || 0);
     barChart.data.datasets[0].data = protocolData;
     barChart.update('none');
   }
 
+  // ─── Buffer size ──────────────────────────────────────────
+  function onBufferChange(val) {
+    bufferSize = parseInt(val);
+    document.getElementById('buffer-val').textContent = Number(val).toLocaleString() + ' p/s';
+    updateBufferStatus();
+    socket.emit('capture:config', { bufferSize });
+  }
+  function updateBufferStatus() {
+    document.getElementById('buffer-status').textContent =
+      `${bufferSize.toLocaleString()} p/s · ${promiscuousMode ? 'Promiscuous Mode' : 'Normal Mode'}`;
+  }
+
+  // ─── Promiscuous mode ─────────────────────────────────────
+  function togglePromiscuous() {
+    promiscuousMode = !promiscuousMode;
+    const btn = document.getElementById('btn-promisc');
+    btn.textContent = `📡 Promiscuous: ${promiscuousMode ? 'ON' : 'OFF'}`;
+    btn.classList.toggle('active', promiscuousMode);
+    // sync radio buttons
+    document.querySelector(`input[name="capture-mode"][value="${promiscuousMode ? 'promiscuous' : 'normal'}"]`).checked = true;
+    updateBufferStatus();
+    socket.emit('capture:config', { promiscuous: promiscuousMode });
+    showToast(
+      promiscuousMode ? '📡 Promiscuous Mode เปิดแล้ว' : '🖥️ กลับสู่ Normal Mode',
+      promiscuousMode
+        ? 'ดักจับแพ็กเก็ตทั้งเครือข่ายในขณะนี้'
+        : 'ดักจับเฉพาะแพ็กเก็ตของเครื่องนี้เท่านั้น',
+      'info',
+      'mode-change'
+    );
+  }
+  function onCaptureModeChange(mode) {
+    promiscuousMode = mode === 'promiscuous';
+    const btn = document.getElementById('btn-promisc');
+    btn.textContent = `📡 Promiscuous: ${promiscuousMode ? 'ON' : 'OFF'}`;
+    btn.classList.toggle('active', promiscuousMode);
+    updateBufferStatus();
+    socket.emit('capture:config', { promiscuous: promiscuousMode });
+  }
+
+  // ─── Packet handler ───────────────────────────────────────
   function handlePacket(pkt) {
     if (!pkt) return;
     packets = [pkt, ...packets].slice(0, 200);
+    checkSecurityAlert(pkt);
     renderTable();
   }
 
+  // ─── Socket.io ────────────────────────────────────────────
   const socket = io();
 
   socket.on('connect', () => {
-    console.log('Socket connected:', socket.id);
-    socket.emit('capture:start', { iface: '5', filter: 'ip' });
+    socket.emit('capture:start', { iface: '5', filter: '' });
     setAlertsBox('เชื่อมต่อกับเซิร์ฟเวอร์สำเร็จ รอ packet จาก capture.js...', 'info');
   });
 
   socket.on('connected', (data) => {
-    console.log('Server connected event:', data);
     if (typeof data.capturing === 'boolean') {
       running = data.capturing;
       document.querySelector('.btn-stop').textContent = running ? 'หยุดดักจับ' : 'เริ่มดักจับ';
-      document.querySelector('.badge-iface').textContent = data.interface || 'eth0';
+      document.getElementById('iface-badge').textContent = data.interface || 'eth0';
     }
   });
 
-  socket.on('packet', (pkt) => {
-    handlePacket(pkt);
-  });
+  socket.on('packet', handlePacket);
 
   socket.on('stats', (stats) => {
     updateMetrics(stats);
     updateCharts(stats);
   });
 
-  socket.on('alert', (alert) => {
-    addAlert(alert);
-  });
+  socket.on('alert', addAlert);
 
   socket.on('capture:status', ({ capturing, interface: iface }) => {
     running = capturing;
     document.querySelector('.btn-stop').textContent = capturing ? 'หยุดดักจับ' : 'เริ่มดักจับ';
-    document.querySelector('.badge-iface').textContent = iface || 'eth0';
-    if (!capturing) {
-      setAlertsBox('ดักจับหยุดแล้ว', 'warn');
-    }
+    document.getElementById('iface-badge').textContent = iface || 'eth0';
+    if (!capturing) setAlertsBox('ดักจับหยุดแล้ว', 'warn');
   });
 
   socket.on('disconnect', () => {
@@ -612,14 +759,11 @@
     document.querySelector('.btn-stop').textContent = 'เริ่มดักจับ';
   });
 
-  function toggleCapture(btn) {
-    if (running) {
-      socket.emit('capture:stop');
-    } else {
-      socket.emit('capture:start', { iface: '5', filter: 'ip' });
-    }
+  // ─── Capture controls ─────────────────────────────────────
+  function toggleCapture() {
+    if (running) socket.emit('capture:stop');
+    else socket.emit('capture:start', { iface: '5', filter: '' });
   }
-
   function setFilter(f, btn) {
     currentFilter = f;
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
@@ -627,5 +771,7 @@
     renderTable();
   }
 
+  // ─── Init ─────────────────────────────────────────────────
   setAlertsBox('กำลังเชื่อมต่อกับเซิร์ฟเวอร์...', 'info');
+  updateBufferStatus();
 </script>

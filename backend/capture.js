@@ -1,203 +1,235 @@
 const os = require('os');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 
+// ── State ─────────────────────────────────────────────────────────────────────
 let tshark = null;
 let capturing = false;
 let currentIface = '';
-let stats = {
-  total: 0,
-  encrypted: 0,
-  unencrypted: 0,
-  protocols: { HTTPS: 0, HTTP: 0, DNS: 0, SSH: 0, TCP: 0, UDP: 0, ICMP: 0, OTHER: 0 },
-  startTime: null
-};
 let statsTimer = null;
 let packetId = 0;
+let stats = makeStats();
 
-const ENCRYPTED_PORTS = new Set([443, 8443, 465, 993, 995, 587]);
-const SSH_PORTS = new Set([22]);
+// ── Capture config (runtime adjustable) ───────────────────────────────────────
+let captureConfig = {
+  bufferSize:   5000,    // packets/sec limit (1000–10000)
+  promiscuous:  false,   // true = -p flag removed (promiscuous on), false = -p (off)
+};
 
-function getLocalIP() {
-  const interfaces = os.networkInterfaces();
-
-  for (let name in interfaces) {
-    for (let iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
+function makeStats() {
+  return {
+    total: 0,
+    encrypted: 0,
+    unencrypted: 0,
+    protocols: { HTTPS: 0, HTTP: 0, DNS: 0, SSH: 0, FTP: 0, TELNET: 0, TCP: 0, UDP: 0, ICMP: 0, OTHER: 0 },
+    startTime: Date.now()
+  };
 }
 
-const myIP = getLocalIP();
-console.log('My IP:', myIP);
+// ── Port tables ───────────────────────────────────────────────────────────────
+const PORT_PROTO = {
+  80: 'HTTP', 8080: 'HTTP',
+  443: 'HTTPS', 8443: 'HTTPS', 465: 'HTTPS', 993: 'HTTPS', 995: 'HTTPS', 587: 'HTTPS',
+  22: 'SSH',
+  53: 'DNS',
+  21: 'FTP', 20: 'FTP',
+  23: 'TELNET',
+};
 
+const ENCRYPTED_PROTOS = new Set(['HTTPS', 'SSH']);
+
+const TLS_VERSION_MAP = {
+  '0x0304': 'TLS 1.3',
+  '0x0303': 'TLS 1.2',
+  '0x0302': 'TLS 1.1',
+  '0x0301': 'TLS 1.0',
+  '0x0300': 'SSL 3.0',
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function toPort(value) {
   const p = parseInt(value, 10);
   return Number.isNaN(p) ? null : p;
 }
 
-function isEncryptedPort(srcPort, dstPort) {
-  const src = toPort(srcPort);
-  const dst = toPort(dstPort);
-  return (src && (ENCRYPTED_PORTS.has(src) || SSH_PORTS.has(src))) ||
-         (dst && (ENCRYPTED_PORTS.has(dst) || SSH_PORTS.has(dst)));
-}
-
-function normalizeProtocol(proto, srcPort, dstPort, tlsVer) {
-  const p = proto ? proto.toUpperCase() : '';
-  const src = toPort(srcPort);
-  const dst = toPort(dstPort);
-
-  // 🔐 TLS จริง (แม่นสุด)
-  if (tlsVer && tlsVer !== '') return 'HTTPS';
-
-  // 🔐 HTTPS port
-  if (src === 443 || dst === 443) return 'HTTPS';
-
-  // 🔐 SSH
-  if (src === 22 || dst === 22) return 'SSH';
-
-  // 🌐 DNS
-  if (p.includes('DNS')) return 'DNS';
-
-  // 🌐 HTTP
-  if (src === 80 || dst === 80) return 'HTTP';
-
-  // 🧠 protocol จาก tshark
-  if (p.includes('HTTP')) return 'HTTP';
-  if (p.includes('UDP')) return 'UDP';
-  if (p.includes('ICMP')) return 'ICMP';
-
-  // TCP fallback
-  if (p.includes('TCP')) return 'TCP';
-
-  return 'OTHER';
-}
-
-function isEncrypted(proto, srcPort, dstPort, tlsVer) {
-  const src = toPort(srcPort);
-  const dst = toPort(dstPort);
-
-  if (tlsVer && tlsVer !== '') return true;
-  if (src === 443 || dst === 443) return true;
-  if (src === 22 || dst === 22) return true;
-
-  return false;
-}
-
-function tlsVersionFromProto(proto, srcPort, dstPort) {
-  const p = proto ? proto.toUpperCase() : '';
-  if (p.includes('TLS 1.3') || p.includes('TLS1.3')) return 'TLS 1.3';
-  if (p.includes('TLS 1.2') || p.includes('TLS1.2')) return 'TLS 1.2';
-  if (p.includes('TLS 1.1') || p.includes('TLS1.1')) return 'TLS 1.1';
-  if (p.includes('TLS 1.0') || p.includes('TLS1.0')) return 'TLS 1.0';
-  if (p.includes('SSL')) return 'SSL 3.0';
-  if (p.includes('SSH')) return 'SSH-2.0';
-  if (p.includes('HTTPS')) return 'TLS 1.3';
-  if (isEncryptedPort(srcPort, dstPort)) {
-    return SSH_PORTS.has(toPort(srcPort)) || SSH_PORTS.has(toPort(dstPort)) ? 'SSH-2.0' : 'TLS 1.3';
-  }
-  return '-';
-}
-
-function emitStats(io) {
-  if (!io) return;
-  const elapsed = stats.startTime ? (Date.now() - stats.startTime) / 1000 : 1;
-  io.emit('stats', {
-    total: stats.total,
-    encrypted: stats.encrypted,
-    unencrypted: stats.unencrypted,
-    encryptedPct: stats.total > 0 ? Math.round((stats.encrypted / stats.total) * 100) : 0,
-    protocols: { ...stats.protocols },
-    pps: Math.round(stats.total / Math.max(1, elapsed)),
-    uptime: Math.round(elapsed)
-  });
-}
-
-function resetStats() {
-  stats = {
-    total: 0,
-    encrypted: 0,
-    unencrypted: 0,
-    protocols: { HTTPS: 0, HTTP: 0, DNS: 0, SSH: 0, TCP: 0, UDP: 0, ICMP: 0, OTHER: 0 },
-    startTime: Date.now()
-  };
-  packetId = 0;
-}
-
-function emitPacket(io, pkt) {
-  if (!pkt || !io) return;
-
-  stats.total += 1;
-  if (pkt.encrypted) stats.encrypted += 1;
-  else stats.unencrypted += 1;
-
-  if (stats.protocols[pkt.protocol] !== undefined) stats.protocols[pkt.protocol] += 1;
-  else stats.protocols.OTHER += 1;
-
-  io.emit('packet', pkt);
-  if (stats.total % 50 === 0) emitStats(io);
-}
-
-function parseLine(line) {
-  const [src, dst, tcpSrc, tcpDst, udpSrc, udpDst, proto, tlsVer, len] = line.split('\t');
-  if (!src || !dst) return null;
-
-  const srcPort = tcpSrc || udpSrc || '-';
-  const dstPort = tcpDst || udpDst || '-';
-  const protocol = normalizeProtocol(proto, srcPort, dstPort, tlsVer);
-  const encrypted = isEncrypted(proto, srcPort, dstPort, tlsVer);  const tlsVersion = tlsVersionFromProto(proto, srcPort, dstPort);
-  const size = parseInt(len, 10) || 0;
-
-  return {
-    id: ++packetId,
-    timestamp: new Date().toISOString(),
-    time: new Date().toLocaleTimeString('th-TH'),
-    srcIP: src,
-    dstIP: dst,
-    srcPort,
-    dstPort,
-    protocol,
-    size,
-    tlsVersion: tlsVersion || '-',
-    encrypted
-  };
-}
-
-// 🔹 หา IP เครื่อง
 function getLocalIP() {
-  const interfaces = os.networkInterfaces();
-
-  for (let name in interfaces) {
-    for (let iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
     }
   }
   return null;
 }
 
-function startTshark(io, iface = '5', filter = '') {
-  const tsharkPath = 'C:\\Program Files\\Wireshark\\tshark.exe';
+// ── Protocol / encryption detection ──────────────────────────────────────────
+function parseTlsVersion(raw) {
+  if (!raw || raw.trim() === '') return null;
+  const trimmed = raw.trim();
+  if (TLS_VERSION_MAP[trimmed]) return TLS_VERSION_MAP[trimmed];
+  const upper = trimmed.toUpperCase();
+  if (upper.includes('1.3')) return 'TLS 1.3';
+  if (upper.includes('1.2')) return 'TLS 1.2';
+  if (upper.includes('1.1')) return 'TLS 1.1';
+  if (upper.includes('1.0')) return 'TLS 1.0';
+  if (upper.includes('SSL')) return 'SSL 3.0';
+  return null;
+}
 
-  // 🔥 auto filter
-  if (!filter) {
-    const myIP = getLocalIP();
+function normalizeProtocol(tsharkProto, srcPort, dstPort, tlsVer) {
+  const src = toPort(srcPort);
+  const dst = toPort(dstPort);
+  const p = tsharkProto ? tsharkProto.toUpperCase().trim() : '';
 
-    if (myIP) {
-      console.log('Using IP filter:', myIP);
-      filter = `host ${myIP}`;
-    } else {
-      console.warn('⚠️ Cannot detect local IP');
+  if (tlsVer) return 'HTTPS';
+  if (p === 'TLS' || p === 'SSL' || p.startsWith('TLS'))   return 'HTTPS';
+  if (p === 'HTTP' || p === 'HTTP2' || p === 'HTTP/2')      return 'HTTP';
+  if (p === 'DNS')                                           return 'DNS';
+  if (p === 'SSH')                                           return 'SSH';
+  if (p === 'FTP' || p === 'FTP-DATA')                      return 'FTP';
+  if (p === 'TELNET')                                        return 'TELNET';
+  if (p === 'ICMP' || p === 'ICMPv6')                       return 'ICMP';
+  if (p === 'UDP')                                           return 'UDP';
+
+  const fromPort = PORT_PROTO[dst] || PORT_PROTO[src];
+  if (fromPort) return fromPort;
+
+  if (p === 'TCP' || src !== null) return 'TCP';
+  return 'OTHER';
+}
+
+function detectEncryption(protocol, tlsVer) {
+  if (tlsVer) return true;
+  return ENCRYPTED_PROTOS.has(protocol);
+}
+
+function resolveTlsLabel(protocol, tlsVer, srcPort, dstPort) {
+  if (tlsVer) return tlsVer;
+  const src = toPort(srcPort);
+  const dst = toPort(dstPort);
+  if (protocol === 'SSH' || src === 22 || dst === 22) return 'SSH-2.0';
+  if (protocol === 'HTTPS') return 'TLS (data)';
+  return '-';
+}
+
+// ── Buffer rate limiter ───────────────────────────────────────────────────────
+// Simple token-bucket: allow at most `captureConfig.bufferSize` packets/sec
+let tokenBucket = 0;
+let lastTokenRefill = Date.now();
+
+function acquireToken() {
+  const now = Date.now();
+  const elapsed = (now - lastTokenRefill) / 1000;
+  tokenBucket += elapsed * captureConfig.bufferSize;
+  if (tokenBucket > captureConfig.bufferSize) tokenBucket = captureConfig.bufferSize;
+  lastTokenRefill = now;
+
+  if (tokenBucket >= 1) {
+    tokenBucket -= 1;
+    return true;
+  }
+  return false;
+}
+
+// ── Parse one tshark output line ──────────────────────────────────────────────
+function parseLine(line) {
+  const parts = line.split('\t');
+  if (parts.length < 9) return null;
+
+  const [src, dst, tcpSrc, tcpDst, udpSrc, udpDst, tsharkProto, tlsRaw, lenRaw] = parts;
+  if (!src || !dst || src.trim() === '' || dst.trim() === '') return null;
+
+  const srcPort  = tcpSrc.trim() || udpSrc.trim() || '-';
+  const dstPort  = tcpDst.trim() || udpDst.trim() || '-';
+  const tlsVer   = parseTlsVersion(tlsRaw);
+  const protocol = normalizeProtocol(tsharkProto, srcPort, dstPort, tlsVer);
+  const encrypted= detectEncryption(protocol, tlsVer);
+  const tlsLabel = resolveTlsLabel(protocol, tlsVer, srcPort, dstPort);
+  const size     = parseInt(lenRaw, 10) || 0;
+
+  return {
+    id:         ++packetId,
+    timestamp:  new Date().toISOString(),
+    time:       new Date().toLocaleTimeString('th-TH'),
+    srcIP:      src.trim(),
+    dstIP:      dst.trim(),
+    srcPort,
+    dstPort,
+    protocol,
+    size,
+    tlsVersion: tlsLabel,
+    encrypted,
+  };
+}
+
+// ── Stats / emit helpers ──────────────────────────────────────────────────────
+function emitStats(io) {
+  if (!io) return;
+  const elapsed = (Date.now() - stats.startTime) / 1000 || 1;
+  io.emit('stats', {
+    total:        stats.total,
+    encrypted:    stats.encrypted,
+    unencrypted:  stats.unencrypted,
+    encryptedPct: stats.total > 0 ? Math.round((stats.encrypted / stats.total) * 100) : 0,
+    protocols:    { ...stats.protocols },
+    pps:          Math.round(stats.total / Math.max(1, elapsed)),
+    uptime:       Math.round(elapsed),
+    config:       { bufferSize: captureConfig.bufferSize, promiscuous: captureConfig.promiscuous },
+  });
+}
+
+function emitPacket(io, pkt) {
+  if (!pkt || !io) return;
+
+  // Apply buffer rate limit
+  if (!acquireToken()) return;
+
+  stats.total++;
+  if (pkt.encrypted) stats.encrypted++;
+  else stats.unencrypted++;
+
+  if (stats.protocols[pkt.protocol] !== undefined) stats.protocols[pkt.protocol]++;
+  else stats.protocols.OTHER++;
+
+  io.emit('packet', pkt);
+
+  // Security alerts from server side
+  const INSECURE = { HTTP: true, FTP: true, TELNET: true };
+  if (INSECURE[pkt.protocol]) {
+    io.emit('alert', {
+      type: pkt.protocol === 'TELNET' ? 'danger' : 'warn',
+      message: `[${pkt.protocol}] ${pkt.srcIP}:${pkt.srcPort} → ${pkt.dstIP}:${pkt.dstPort} — ไม่มีการเข้ารหัส`,
+    });
+  }
+
+  if (stats.total % 50 === 0) emitStats(io);
+}
+
+// ── tshark process ────────────────────────────────────────────────────────────
+function buildTsharkArgs(iface, filter) {
+  let bpf = filter || '';
+  const myIP = getLocalIP();
+
+  if (bpf.trim().toLowerCase() === 'ip' && myIP && !captureConfig.promiscuous) {
+    bpf = `host ${myIP}`;
+    console.log(`[capture] auto BPF filter: ${bpf}`);
+  }
+
+  if (!bpf) {
+    if (myIP && !captureConfig.promiscuous) {
+      bpf = `host ${myIP}`;
+      console.log(`[capture] auto BPF filter: ${bpf}`);
+    } else if (!myIP) {
+      console.warn('[capture] ⚠️  ตรวจ local IP ไม่ได้ — ดักจับทุก packet');
     }
   }
 
   const args = [
     '-i', iface,
     '-l',
+    '-n',
     '-T', 'fields',
+    '-E', 'separator=\t',
+    '-E', 'occurrence=f',
     '-e', 'ip.src',
     '-e', 'ip.dst',
     '-e', 'tcp.srcport',
@@ -205,88 +237,131 @@ function startTshark(io, iface = '5', filter = '') {
     '-e', 'udp.srcport',
     '-e', 'udp.dstport',
     '-e', '_ws.col.Protocol',
-    '-e', 'tcp.port',
     '-e', 'tls.record.version',
-    '-e', 'frame.len'
+    '-e', 'frame.len',
   ];
 
-  if (filter) {
-    args.unshift('-f', filter);
+  // Promiscuous mode: tshark default is promiscuous ON; use -p to disable it
+  // So: normal mode → add -p (no promiscuous), promiscuous → don't add -p
+  if (!captureConfig.promiscuous) {
+    args.push('-p'); // disable promiscuous = capture only own traffic
   }
+
+  if (bpf) args.push('-f', bpf);
+
+  return args;
+}
+
+function startTshark(io, iface, filter) {
+  const tsharkPath = 'C:\\Program Files\\Wireshark\\tshark.exe';
+  const args = buildTsharkArgs(iface, filter);
+
+  console.log(`[capture] starting tshark | promiscuous=${captureConfig.promiscuous} | buffer=${captureConfig.bufferSize} p/s`);
+  console.log(`[capture] args: ${args.join(' ')}`);
 
   tshark = spawn(tsharkPath, args, { windowsHide: true });
 
   let leftover = '';
 
   tshark.stdout.on('data', (data) => {
-    const chunk = leftover + data.toString();
+    const chunk = leftover + data.toString('utf8');
     const lines = chunk.split('\n');
     leftover = lines.pop();
-
-    lines.forEach((line) => {
-      if (!line.trim()) return;
-
+    for (const line of lines) {
+      if (!line.trim()) continue;
       const pkt = parseLine(line);
       if (pkt) emitPacket(io, pkt);
-    });
+    }
   });
 
-  tshark.stderr.on('data', (err) => {
-    console.error('[tshark]', err.toString());
-    if (io) io.emit('error', { message: err.toString() });
+  tshark.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg.toLowerCase().includes('error') || msg.toLowerCase().includes('failed')) {
+      console.error('[tshark error]', msg);
+      if (io) io.emit('error', { message: msg });
+    }
   });
 
   tshark.on('exit', (code, signal) => {
     capturing = false;
+    console.log(`[tshark] exit code=${code} signal=${signal}`);
     if (io) io.emit('capture:status', { capturing: false });
-    console.log(`tshark exited code=${code} signal=${signal}`);
   });
 
   if (statsTimer) clearInterval(statsTimer);
   statsTimer = setInterval(() => emitStats(io), 2000);
 
+  // reset token bucket on start
+  tokenBucket = captureConfig.bufferSize;
+  lastTokenRefill = Date.now();
+
   capturing = true;
   currentIface = iface;
-
   if (io) {
-    io.emit('capture:status', { capturing: true, interface: iface });
+    io.emit('capture:status', {
+      capturing: true,
+      interface: iface,
+      config: { ...captureConfig },
+    });
     emitStats(io);
   }
 }
 
-const { exec } = require('child_process');
-
 function stopTshark() {
   capturing = false;
-
-  if (tshark) {
-    tshark.kill('SIGTERM');
-    tshark = null;
-  }
-
-  // Fallback: kill all tshark processes
+  if (tshark) { tshark.kill('SIGTERM'); tshark = null; }
   exec('taskkill /IM tshark.exe /F', () => {});
-
-  if (statsTimer) {
-    clearInterval(statsTimer);
-    statsTimer = null;
-  }
+  if (statsTimer) { clearInterval(statsTimer); statsTimer = null; }
 }
 
+// ── Public API ────────────────────────────────────────────────────────────────
 module.exports = {
   start(iface = '5', filter = '', io) {
-    if (capturing) {
-      stopTshark();
-    }
-    resetStats();
+    if (capturing) stopTshark();
+    stats    = makeStats();
+    packetId = 0;
     startTshark(io, iface, filter);
   },
 
-  stop() {
-    stopTshark();
+  stop: stopTshark,
+
+  /**
+   * Apply runtime config changes (bufferSize, promiscuous).
+   * If capturing, restart tshark so promiscuous flag takes effect.
+   */
+  applyConfig(newConfig = {}, io) {
+    let needRestart = false;
+
+    if (typeof newConfig.bufferSize === 'number') {
+      const clamped = Math.max(1000, Math.min(10000, newConfig.bufferSize));
+      captureConfig.bufferSize = clamped;
+      console.log(`[capture] bufferSize → ${clamped}`);
+    }
+
+    if (typeof newConfig.promiscuous === 'boolean') {
+      if (captureConfig.promiscuous !== newConfig.promiscuous) {
+        captureConfig.promiscuous = newConfig.promiscuous;
+        needRestart = true; // tshark needs -p flag change
+        console.log(`[capture] promiscuous → ${newConfig.promiscuous}`);
+      }
+    }
+
+    if (needRestart && capturing) {
+      console.log('[capture] restarting tshark to apply promiscuous mode change...');
+      const iface  = currentIface;
+      stopTshark();
+      stats    = makeStats();
+      packetId = 0;
+      startTshark(io, iface, '');
+    }
+
+    if (io) {
+      io.emit('capture:config:ack', { ...captureConfig });
+    }
   },
 
-  isCapturing: () => capturing,
+  isCapturing:  () => capturing,
   getInterface: () => currentIface,
-  getStats: () => ({ ...stats })
+  getStats:     () => ({ ...stats }),
+  getConfig:    () => ({ ...captureConfig }),
 };

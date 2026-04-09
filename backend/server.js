@@ -1,30 +1,59 @@
 // server.js
 const express = require("express");
-const http = require("http");
-const cors = require("cors");
-const path = require("path");
-const { initSocket } = require("./socket");
-const socketHandler = require("./socketHandler");
+const http    = require("http");
+const cors    = require("cors");
+const path    = require("path");
+const { Server } = require("socket.io");
 const packetCapture = require("./capture");
-const authRoutes = require("./routes/authRoutes"); // <-- 1. นำเข้า Auth Routes
+const authRoutes    = require("./routes/authRoutes");
 
 const app = express();
 app.use(cors());
-app.use(express.json()); // <-- 2. สำคัญมาก! ต้องมีเพื่อให้ Express อ่านข้อมูล JSON จาก req.body ได้
-app.use(express.static(path.join(__dirname, '../frontend'))); // <-- Serve frontend files
+app.use(express.json());
+app.use(express.static(path.join(__dirname, '../frontend')));
 
-// --- 3. ใช้งาน Routes ของระบบ Authentication ---
+// Auth API routes
 app.use("/api", authRoutes);
 
 const server = http.createServer(app);
+const io     = new Server(server, { cors: { origin: "*" } });
 
-// 4. กำหนดค่าและเปิดใช้งาน Socket.io
-const io = initSocket(server);
+// ── Socket.io event handling ───────────────────────────────────────────────────
+io.on("connection", (socket) => {
+  console.log(`[socket] client connected: ${socket.id}`);
 
-// 5. จัดการ events ระหว่าง Server ↔ Client
-socketHandler(io, packetCapture);
+  // Send current state to new client
+  socket.emit("connected", {
+    capturing: packetCapture.isCapturing(),
+    interface: packetCapture.getInterface(),
+    config:    packetCapture.getConfig(),
+  });
 
-// 6. เริ่ม Server
+  // ── Start capture ──────────────────────────────────────────
+  socket.on("capture:start", ({ iface = "5", filter = "" } = {}) => {
+    console.log(`[socket] capture:start iface=${iface} filter=${filter}`);
+    packetCapture.start(iface, filter, io);
+  });
+
+  // ── Stop capture ───────────────────────────────────────────
+  socket.on("capture:stop", () => {
+    console.log("[socket] capture:stop");
+    packetCapture.stop();
+    io.emit("capture:status", { capturing: false });
+  });
+
+  // ── Runtime config (bufferSize / promiscuous) ──────────────
+  socket.on("capture:config", (config = {}) => {
+    console.log("[socket] capture:config", config);
+    packetCapture.applyConfig(config, io);
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`[socket] client disconnected: ${socket.id}`);
+  });
+});
+
+// ── Start server ──────────────────────────────────────────────────────────────
 const PORT = 3000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

@@ -1,0 +1,335 @@
+
+<h2 class="sr-only">Real-time Encrypted Packet Visualization Dashboard — แดชบอร์ดแสดงสถิติแพ็กเก็ตเครือข่ายแบบ real-time พร้อม Security Alerts</h2>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+.dash{padding:16px;font-family:var(--font-sans);}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.topbar-left{display:flex;align-items:center;gap:10px;}
+.logo{font-size:15px;font-weight:500;color:var(--color-text-primary);}
+.badge-live{background:#e24b4a;color:#fff;font-size:11px;padding:2px 8px;border-radius:20px;display:flex;align-items:center;gap:4px;}
+.dot{width:6px;height:6px;border-radius:50%;background:#fff;animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.topbar-right{display:flex;gap:8px;align-items:center;}
+.badge-iface{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:4px 10px;font-size:12px;color:var(--color-text-secondary);}
+.btn-stop{background:transparent;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:5px 14px;font-size:13px;cursor:pointer;color:var(--color-text-primary);}
+.btn-stop:hover{background:var(--color-background-secondary);}
+
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(0,1.8fr);gap:10px;margin-bottom:14px;align-items:stretch;}
+.metric-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;}
+.metric-label{font-size:11px;color:var(--color-text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;}
+.metric-val{font-size:22px;font-weight:500;color:var(--color-text-primary);}
+.metric-val.green{color:#1d9e75;}
+.metric-val.red{color:#e24b4a;}
+.metric-sub{font-size:11px;color:var(--color-text-secondary);margin-top:2px;}
+
+.alert-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px 14px;display:flex;flex-direction:column;}
+.alert-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.alert-card-title{font-size:11px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.04em;}
+.alert-badge{font-size:10px;padding:1px 7px;border-radius:10px;font-weight:500;}
+.alert-badge.has-danger{background:#fcebeb;color:#a32d2d;}
+.alert-badge.has-warn{background:#faeeda;color:#854f0b;}
+.alert-badge.none{background:var(--color-background-secondary);color:var(--color-text-secondary);}
+.alert-scroll{flex:1;display:flex;flex-direction:column;gap:4px;max-height:82px;overflow-y:auto;}
+.alert-item{display:flex;align-items:flex-start;gap:6px;padding:5px 8px;border-radius:6px;font-size:11px;line-height:1.4;}
+.alert-item.danger{background:#fcebeb;color:#a32d2d;}
+.alert-item.warning{background:#faeeda;color:#854f0b;}
+.alert-item.empty{color:var(--color-text-secondary);font-size:11px;padding:2px 0;}
+.a-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;margin-top:1px;}
+.a-dot.d{background:#e24b4a;color:#fff;}
+.a-dot.w{background:#ba7517;color:#fff;}
+
+.charts-row{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px;}
+.chart-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px;}
+.chart-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:12px;}
+.charts-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+
+.table-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px;margin-bottom:12px;}
+.table-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.filter-row{display:flex;gap:6px;}
+.filter-btn{background:transparent;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:3px 10px;font-size:11px;cursor:pointer;color:var(--color-text-secondary);}
+.filter-btn.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th{text-align:left;color:var(--color-text-secondary);font-weight:400;padding:4px 8px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:11px;}
+td{padding:6px 8px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-primary);font-family:var(--font-mono);font-size:11px;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--color-background-secondary);}
+.pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:500;}
+.pill-https{background:#e1f5ee;color:#0f6e56;}
+.pill-http{background:#fcebeb;color:#a32d2d;}
+.pill-dns{background:#e6f1fb;color:#185fa5;}
+.pill-ssh{background:#eeedfe;color:#3c3489;}
+.pill-tcp{background:#f1efe8;color:#5f5e5a;}
+.pill-enc{background:#eaf3de;color:#3b6d11;}
+.pill-noenc{background:#fcebeb;color:#a32d2d;}
+
+.bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.proto-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px;}
+.log-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px;}
+.log-scroll{max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin-top:6px;}
+.log-item{display:flex;align-items:flex-start;gap:7px;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.4;}
+.log-item.danger{background:#fcebeb;color:#a32d2d;}
+.log-item.warning{background:#faeeda;color:#854f0b;}
+.log-item.info{background:#e6f1fb;color:#185fa5;}
+.log-icon{flex-shrink:0;width:15px;height:15px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;margin-top:1px;}
+.log-icon.d{background:#e24b4a;color:#fff;}
+.log-icon.w{background:#ba7517;color:#fff;}
+.log-icon.i{background:#378add;color:#fff;}
+</style>
+
+<div class="dash">
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="logo">Packet Viz Dashboard</span>
+      <span class="badge-live"><span class="dot"></span>LIVE</span>
+    </div>
+    <div class="topbar-right">
+      <span class="badge-iface">eth0</span>
+      <span style="font-size:11px;color:var(--color-text-secondary);" id="clock"></span>
+      <button class="btn-stop" onclick="toggleCapture(this)">หยุดดักจับ</button>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Packets/sec</div>
+      <div class="metric-val" id="pps">0</div>
+      <div class="metric-sub">ณ ขณะนี้</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">แพ็กเก็ตทั้งหมด</div>
+      <div class="metric-val" id="total">0</div>
+      <div class="metric-sub">ตั้งแต่เริ่มต้น</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">เข้ารหัสแล้ว</div>
+      <div class="metric-val green" id="enc-pct">0%</div>
+      <div class="metric-sub" id="enc-count">0 แพ็กเก็ต</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">ไม่เข้ารหัส</div>
+      <div class="metric-val red" id="noenc-pct">0%</div>
+      <div class="metric-sub" id="noenc-count">0 แพ็กเก็ต</div>
+    </div>
+
+    <div class="alert-card">
+      <div class="alert-card-header">
+        <span class="alert-card-title">Security Alerts</span>
+        <span class="alert-badge none" id="alert-badge">ไม่มี</span>
+      </div>
+      <div class="alert-scroll" id="alert-mini"></div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">ปริมาณแพ็กเก็ต (Real-time)</div>
+      <div style="position:relative;height:180px;"><canvas id="lineChart" role="img" aria-label="กราฟเส้นปริมาณแพ็กเก็ต">กราฟแสดงจำนวนแพ็กเก็ตต่อวินาที</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">สัดส่วนการเข้ารหัส</div>
+      <div style="position:relative;height:130px;margin-bottom:8px;"><canvas id="donutChart" role="img" aria-label="กราฟโดนัทสัดส่วน Encrypted vs Unencrypted">กราฟโดนัทการเข้ารหัส</canvas></div>
+      <div style="display:flex;gap:12px;justify-content:center;font-size:11px;color:var(--color-text-secondary);">
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#1d9e75;display:inline-block;"></span>Encrypted</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#e24b4a;display:inline-block;"></span>Unencrypted</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-row2">
+    <div class="chart-card">
+      <div class="chart-title">โปรโตคอล</div>
+      <div style="position:relative;height:160px;"><canvas id="barChart" role="img" aria-label="กราฟแท่งโปรโตคอล">สัดส่วนโปรโตคอล</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">แพ็กเก็ตล่าสุด</div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr>
+            <th>เวลา</th><th>Source IP</th><th>Protocol</th><th>TLS</th><th>สถานะ</th>
+          </tr></thead>
+          <tbody id="mini-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <span class="chart-title" style="margin:0;">แพ็กเก็ตทั้งหมด</span>
+      <div class="filter-row" id="filter-row">
+        <button class="filter-btn active" onclick="setFilter('ALL',this)">ทั้งหมด</button>
+        <button class="filter-btn" onclick="setFilter('HTTPS',this)">HTTPS</button>
+        <button class="filter-btn" onclick="setFilter('HTTP',this)">HTTP</button>
+        <button class="filter-btn" onclick="setFilter('DNS',this)">DNS</button>
+        <button class="filter-btn" onclick="setFilter('SSH',this)">SSH</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>#</th><th>เวลา</th><th>Source IP</th><th>Dest IP</th><th>Protocol</th><th>Port</th><th>ขนาด (bytes)</th><th>TLS</th><th>สถานะ</th>
+      </tr></thead>
+      <tbody id="packet-table"></tbody>
+    </table>
+  </div>
+
+  <div class="log-card">
+    <div class="chart-title" style="margin-bottom:0;">Security Alert Log</div>
+    <div class="log-scroll" id="alert-log">
+      <div style="font-size:11px;color:var(--color-text-secondary);padding:6px 0;">รอข้อมูล...</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+let running=true, totalPkts=0, encPkts=0, noencPkts=0, pktId=1;
+let currentFilter='ALL', packets=[];
+const MAX_ROWS=20;
+const alertList=[], MAX_ALERTS=5;
+const alertLog=[], MAX_LOG=30;
+const cooldown={};
+
+const PROTOCOLS=['HTTPS','HTTPS','HTTPS','HTTPS','HTTP','DNS','SSH','TCP','HTTPS','HTTPS'];
+const TLS_MAP={HTTPS:['TLS 1.3','TLS 1.2','TLS 1.3','TLS 1.0','SSL 3.0'],SSH:['SSH-2.0']};
+const PORTS={HTTPS:443,HTTP:80,DNS:53,SSH:22,TCP:8080};
+const IP_POOL=['192.168.1.','10.0.0.','172.16.0.','203.150.'];
+function rIP(p){return p[Math.floor(Math.random()*p.length)]+(Math.floor(Math.random()*250)+2);}
+
+const lineLabels=Array.from({length:30},()=>'');
+const lineData=Array.from({length:30},()=>0);
+const lCtx=document.getElementById('lineChart').getContext('2d');
+const lineChart=new Chart(lCtx,{type:'line',data:{labels:lineLabels,datasets:[{label:'pps',data:lineData,borderColor:'#378add',backgroundColor:'rgba(55,138,221,0.08)',borderWidth:1.5,pointRadius:0,fill:true,tension:0.4}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{ticks:{display:false},grid:{color:'rgba(128,128,128,0.1)'}},y:{min:0,ticks:{font:{size:10}},grid:{color:'rgba(128,128,128,0.1)'}}}}});
+
+const dCtx=document.getElementById('donutChart').getContext('2d');
+const donutChart=new Chart(dCtx,{type:'doughnut',data:{labels:['Encrypted','Unencrypted'],datasets:[{data:[1,1],backgroundColor:['#1d9e75','#e24b4a'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},cutout:'70%'}});
+
+const bCtx=document.getElementById('barChart').getContext('2d');
+const protoCounts={HTTPS:0,HTTP:0,DNS:0,SSH:0,TCP:0};
+const barChart=new Chart(bCtx,{type:'bar',data:{labels:['HTTPS','HTTP','DNS','SSH','TCP'],datasets:[{data:[0,0,0,0,0],backgroundColor:['#1d9e75','#e24b4a','#378add','#534ab7','#888780'],borderRadius:3,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10}},grid:{display:false}},y:{ticks:{font:{size:10}},grid:{color:'rgba(128,128,128,0.1)'}}}}});
+
+setInterval(()=>{ document.getElementById('clock').textContent=new Date().toLocaleTimeString('th-TH'); },1000);
+
+function fireAlert(id, type, msg){
+  const now=Date.now();
+  if(cooldown[id]&&now-cooldown[id]<6000) return;
+  cooldown[id]=now;
+  const entry={type,msg,time:new Date().toLocaleTimeString('th-TH')};
+  alertList.unshift(entry);
+  if(alertList.length>MAX_ALERTS) alertList.pop();
+  alertLog.unshift(entry);
+  if(alertLog.length>MAX_LOG) alertLog.pop();
+  renderAlertMini();
+  renderAlertLog();
+}
+
+function renderAlertMini(){
+  const box=document.getElementById('alert-mini');
+  const badge=document.getElementById('alert-badge');
+  if(!alertList.length){
+    box.innerHTML='<div class="alert-item empty">ยังไม่มีการแจ้งเตือน</div>';
+    badge.className='alert-badge none'; badge.textContent='ไม่มี';
+    return;
+  }
+  box.innerHTML=alertList.map(a=>`
+    <div class="alert-item ${a.type}">
+      <span class="a-dot ${a.type==='danger'?'d':'w'}">${a.type==='danger'?'!':'~'}</span>
+      <span style="flex:1;min-width:0;">${a.msg} <span style="opacity:.6">${a.time}</span></span>
+    </div>`).join('');
+  const hasDanger=alertList.some(a=>a.type==='danger');
+  badge.className='alert-badge '+(hasDanger?'has-danger':'has-warn');
+  badge.textContent=hasDanger?`${alertList.filter(a=>a.type==='danger').length} อันตราย`:`${alertList.length} เตือน`;
+}
+
+function renderAlertLog(){
+  const box=document.getElementById('alert-log');
+  if(!alertLog.length){ box.innerHTML='<div style="font-size:11px;color:var(--color-text-secondary);padding:6px 0;">ยังไม่มีรายการ</div>'; return; }
+  box.innerHTML=alertLog.map(a=>`
+    <div class="log-item ${a.type}">
+      <span class="log-icon ${a.type==='danger'?'d':a.type==='warning'?'w':'i'}">${a.type==='danger'?'!':a.type==='warning'?'~':'i'}</span>
+      <div style="flex:1;">
+        <span>${a.msg}</span>
+        <span style="margin-left:8px;opacity:.6;">${a.time}</span>
+      </div>
+    </div>`).join('');
+}
+
+function checkAlerts(proto, tls){
+  if(proto==='HTTP')   fireAlert('http','danger','พบ HTTP ที่ไม่เข้ารหัส (Port 80)');
+  if(proto==='FTP')    fireAlert('ftp','danger','พบ FTP ที่ไม่เข้ารหัส (Port 21)');
+  if(proto==='Telnet') fireAlert('telnet','danger','พบ Telnet ที่ไม่เข้ารหัส (Port 23)');
+  if(tls==='TLS 1.0')  fireAlert('tls10','warning','พบ TLS 1.0 ที่มีช่องโหว่ — ควรอัปเกรดเป็น TLS 1.3');
+  if(tls==='SSL 3.0')  fireAlert('ssl3','warning','พบ SSL 3.0 ที่มีช่องโหว่สูงมาก — ควรปิดใช้งานทันที');
+}
+
+function protoClass(p){return({HTTPS:'pill-https',HTTP:'pill-http',DNS:'pill-dns',SSH:'pill-ssh',TCP:'pill-tcp'})[p]||'pill-tcp';}
+
+function genPacket(){
+  const proto=PROTOCOLS[Math.floor(Math.random()*PROTOCOLS.length)];
+  const tlsArr=TLS_MAP[proto];
+  const tls=tlsArr?tlsArr[Math.floor(Math.random()*tlsArr.length)]:'-';
+  const enc=proto==='HTTPS'||proto==='SSH';
+  return{id:pktId++,time:new Date().toLocaleTimeString('th-TH'),src:rIP(IP_POOL),dst:rIP(IP_POOL),proto,port:PORTS[proto]||(Math.floor(Math.random()*10000)+1024),size:Math.floor(Math.random()*1400)+40,tls,enc};
+}
+
+function renderTable(){
+  const filtered=currentFilter==='ALL'?packets:packets.filter(p=>p.proto===currentFilter);
+  document.getElementById('packet-table').innerHTML=filtered.slice(0,MAX_ROWS).map(p=>`<tr>
+    <td>${p.id}</td><td>${p.time}</td><td>${p.src}</td><td>${p.dst}</td>
+    <td><span class="pill ${protoClass(p.proto)}">${p.proto}</span></td>
+    <td>${p.port}</td><td>${p.size}</td><td>${p.tls}</td>
+    <td><span class="pill ${p.enc?'pill-enc':'pill-noenc'}">${p.enc?'Encrypted':'Unencrypted'}</span></td>
+  </tr>`).join('');
+}
+
+function renderMiniTable(){
+  document.getElementById('mini-table').innerHTML=packets.slice(0,6).map(p=>`<tr>
+    <td>${p.time}</td><td>${p.src}</td>
+    <td><span class="pill ${protoClass(p.proto)}">${p.proto}</span></td>
+    <td>${p.tls}</td>
+    <td><span class="pill ${p.enc?'pill-enc':'pill-noenc'}">${p.enc?'Enc':'No Enc'}</span></td>
+  </tr>`).join('');
+}
+
+let interval=setInterval(tick, 800);
+function tick(){
+  if(!running) return;
+  const burst=Math.floor(Math.random()*18)+3;
+  let e=0, n=0, newPkts=[];
+  for(let i=0;i<burst;i++){
+    const p=genPacket();
+    newPkts.push(p);
+    if(p.enc) e++; else n++;
+    protoCounts[p.proto]=(protoCounts[p.proto]||0)+1;
+    checkAlerts(p.proto, p.tls);
+  }
+  totalPkts+=burst; encPkts+=e; noencPkts+=n;
+  packets=[...newPkts,...packets].slice(0,200);
+
+  document.getElementById('pps').textContent=burst;
+  document.getElementById('total').textContent=totalPkts.toLocaleString();
+  const ep=Math.round(encPkts/totalPkts*100);
+  document.getElementById('enc-pct').textContent=ep+'%';
+  document.getElementById('noenc-pct').textContent=(100-ep)+'%';
+  document.getElementById('enc-count').textContent=encPkts.toLocaleString()+' แพ็กเก็ต';
+  document.getElementById('noenc-count').textContent=noencPkts.toLocaleString()+' แพ็กเก็ต';
+
+  lineData.push(burst); lineData.shift(); lineChart.update('none');
+  donutChart.data.datasets[0].data=[encPkts,noencPkts]; donutChart.update('none');
+  barChart.data.datasets[0].data=['HTTPS','HTTP','DNS','SSH','TCP'].map(k=>protoCounts[k]||0); barChart.update('none');
+  renderTable(); renderMiniTable();
+}
+
+function toggleCapture(btn){
+  running=!running;
+  btn.textContent=running?'หยุดดักจับ':'เริ่มดักจับ';
+  if(running) interval=setInterval(tick,800); else clearInterval(interval);
+}
+function setFilter(f,btn){
+  currentFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
+
+renderAlertMini();
+</script>
