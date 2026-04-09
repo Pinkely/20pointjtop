@@ -1,3 +1,4 @@
+const os = require('os');
 const { spawn } = require('child_process');
 
 let tshark = null;
@@ -15,6 +16,21 @@ let packetId = 0;
 
 const ENCRYPTED_PORTS = new Set([443, 8443, 465, 993, 995, 587]);
 const SSH_PORTS = new Set([22]);
+
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+
+  for (let name in interfaces) {
+    for (let iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+}
+
+const myIP = getLocalIP();
+console.log('My IP:', myIP);
 
 function toPort(value) {
   const p = parseInt(value, 10);
@@ -149,8 +165,35 @@ function parseLine(line) {
   };
 }
 
+// 🔹 หา IP เครื่อง
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+
+  for (let name in interfaces) {
+    for (let iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return null;
+}
+
 function startTshark(io, iface = '5', filter = '') {
   const tsharkPath = 'C:\\Program Files\\Wireshark\\tshark.exe';
+
+  // 🔥 auto filter
+  if (!filter) {
+    const myIP = getLocalIP();
+
+    if (myIP) {
+      console.log('Using IP filter:', myIP);
+      filter = `host ${myIP}`;
+    } else {
+      console.warn('⚠️ Cannot detect local IP');
+    }
+  }
+
   const args = [
     '-i', iface,
     '-l',
@@ -164,29 +207,29 @@ function startTshark(io, iface = '5', filter = '') {
     '-e', '_ws.col.Protocol',
     '-e', 'tcp.port',
     '-e', 'tls.record.version',
-    '-e', 'frame.len',
-    '-e', 'tls.record.version'
+    '-e', 'frame.len'
   ];
-  if (filter) args.push('-f', filter);
+
+  if (filter) {
+    args.unshift('-f', filter);
+  }
 
   tshark = spawn(tsharkPath, args, { windowsHide: true });
-  capturing = true;
-  currentIface = iface;
 
   let leftover = '';
 
-  
-tshark.stdout.on('data', (data) => {
-  const chunk = leftover + data.toString();
-  const lines = chunk.split('\n');
-  leftover = lines.pop(); // เก็บบรรทัดที่ไม่ครบ
+  tshark.stdout.on('data', (data) => {
+    const chunk = leftover + data.toString();
+    const lines = chunk.split('\n');
+    leftover = lines.pop();
 
-  lines.forEach((line) => {
-    if (!line.trim()) return;
-    const pkt = parseLine(line);
-    if (pkt) emitPacket(io, pkt);
+    lines.forEach((line) => {
+      if (!line.trim()) return;
+
+      const pkt = parseLine(line);
+      if (pkt) emitPacket(io, pkt);
+    });
   });
-});
 
   tshark.stderr.on('data', (err) => {
     console.error('[tshark]', err.toString());
@@ -195,7 +238,6 @@ tshark.stdout.on('data', (data) => {
 
   tshark.on('exit', (code, signal) => {
     capturing = false;
-    tshark = null;
     if (io) io.emit('capture:status', { capturing: false });
     console.log(`tshark exited code=${code} signal=${signal}`);
   });
@@ -203,8 +245,13 @@ tshark.stdout.on('data', (data) => {
   if (statsTimer) clearInterval(statsTimer);
   statsTimer = setInterval(() => emitStats(io), 2000);
 
-  io.emit('capture:status', { capturing: true, interface: iface });
-  emitStats(io);
+  capturing = true;
+  currentIface = iface;
+
+  if (io) {
+    io.emit('capture:status', { capturing: true, interface: iface });
+    emitStats(io);
+  }
 }
 
 const { exec } = require('child_process');
@@ -213,9 +260,12 @@ function stopTshark() {
   capturing = false;
 
   if (tshark) {
-    exec('taskkill /IM tshark.exe /F', () => {});
+    tshark.kill('SIGTERM');
     tshark = null;
   }
+
+  // Fallback: kill all tshark processes
+  exec('taskkill /IM tshark.exe /F', () => {});
 
   if (statsTimer) {
     clearInterval(statsTimer);
