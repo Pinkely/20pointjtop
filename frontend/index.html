@@ -1,190 +1,345 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Packet Dashboard</title>
 
-  <!-- Tailwind -->
-  <script src="https://cdn.tailwindcss.com"></script>
+<h2 class="sr-only">Real-time Encrypted Packet Visualization Dashboard — แดชบอร์ดแสดงสถิติแพ็กเก็ตเครือข่ายแบบ real-time</h2>
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); }
+.dash { padding: 16px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.topbar-left { display: flex; align-items: center; gap: 10px; }
+.logo { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+.badge-live { background: #e24b4a; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 20px; display: flex; align-items: center; gap: 4px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.topbar-right { display: flex; gap: 8px; align-items: center; }
+.badge-iface { background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 4px 10px; font-size: 12px; color: var(--color-text-secondary); }
+.btn-stop { background: transparent; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 5px 14px; font-size: 13px; cursor: pointer; color: var(--color-text-primary); }
+.btn-stop:hover { background: var(--color-background-secondary); }
 
-  <!-- Socket.io -->
-  <script src="http://localhost:3000/socket.io/socket.io.js"></script>
-</head>
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 14px; }
+.metric-card { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 12px 14px; }
+.metric-label { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+.metric-val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+.metric-sub { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+.metric-val.green { color: #1d9e75; }
+.metric-val.red { color: #e24b4a; }
+.metric-val.amber { color: #ba7517; }
 
-<body class="bg-gray-900 text-white p-6">
+.charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; margin-bottom: 12px; }
+.chart-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; }
+.chart-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 12px; }
 
-  <h1 class="text-3xl font-bold mb-6">📡 Packet Dashboard</h1>
+.charts-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 
-  <!-- 🔹 Summary Cards -->
-  <div class="grid grid-cols-3 gap-4 mb-6">
-    <div class="bg-gray-800 p-4 rounded">
-      <h2>Total Packets</h2>
-      <p id="totalPackets" class="text-2xl">0</p>
+.table-card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 14px 16px; margin-bottom: 12px; }
+.table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.filter-row { display: flex; gap: 6px; }
+.filter-btn { background: transparent; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 3px 10px; font-size: 11px; cursor: pointer; color: var(--color-text-secondary); }
+.filter-btn.active { background: var(--color-background-info); color: var(--color-text-info); border-color: var(--color-border-info); }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; color: var(--color-text-secondary); font-weight: 400; padding: 4px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); font-size: 11px; }
+td { padding: 6px 8px; border-bottom: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); font-family: var(--font-mono); font-size: 11px; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--color-background-secondary); }
+
+.pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 500; }
+.pill-https { background: #e1f5ee; color: #0f6e56; }
+.pill-http { background: #fcebeb; color: #a32d2d; }
+.pill-dns { background: #e6f1fb; color: #185fa5; }
+.pill-ssh { background: #eeedfe; color: #3c3489; }
+.pill-tcp { background: #f1efe8; color: #5f5e5a; }
+.pill-enc { background: #eaf3de; color: #3b6d11; }
+.pill-noenc { background: #fcebeb; color: #a32d2d; }
+
+.alert-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-radius: var(--border-radius-md); margin-bottom: 6px; font-size: 12px; }
+.alert-warn { background: #faeeda; color: #854f0b; }
+.alert-danger { background: #fcebeb; color: #a32d2d; }
+.alert-info { background: #e6f1fb; color: #185fa5; }
+.alert-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+</style>
+
+<div class="dash">
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="logo">Packet Viz Dashboard</span>
+      <span class="badge-live"><span class="dot"></span>LIVE</span>
     </div>
-    <div class="bg-green-700 p-4 rounded">
-      <h2>Encrypted</h2>
-      <p id="encryptedPackets" class="text-2xl">0</p>
-    </div>
-    <div class="bg-red-700 p-4 rounded">
-      <h2>Unencrypted</h2>
-      <p id="unencryptedPackets" class="text-2xl">0</p>
+    <div class="topbar-right">
+      <span class="badge-iface">eth0</span>
+      <span style="font-size:11px;color:var(--color-text-secondary)" id="clock"></span>
+      <button class="btn-stop" onclick="toggleCapture(this)">หยุดดักจับ</button>
     </div>
   </div>
 
-  <!-- 🔹 Charts -->
-  <div class="grid grid-cols-3 gap-4 mb-6">
-    <canvas id="lineChart"></canvas>
-    <canvas id="pieChart"></canvas>
-    <canvas id="barChart"></canvas>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Packets/sec</div>
+      <div class="metric-val" id="pps">0</div>
+      <div class="metric-sub">ณ ขณะนี้</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">แพ็กเก็ตทั้งหมด</div>
+      <div class="metric-val" id="total">0</div>
+      <div class="metric-sub">ตั้งแต่เริ่มต้น</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">เข้ารหัสแล้ว</div>
+      <div class="metric-val green" id="enc-pct">0%</div>
+      <div class="metric-sub" id="enc-count">0 แพ็กเก็ต</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">ไม่เข้ารหัส</div>
+      <div class="metric-val red" id="noenc-pct">0%</div>
+      <div class="metric-sub" id="noenc-count">0 แพ็กเก็ต</div>
+    </div>
   </div>
 
-  <!-- 🔹 Table -->
-  <div class="bg-gray-800 p-4 rounded">
-    <h2 class="mb-2">Recent Packets</h2>
-    <table class="w-full text-sm">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Source</th>
-          <th>Destination</th>
-          <th>Protocol</th>
-          <th>Encrypted</th>
-        </tr>
-      </thead>
-      <tbody id="packetTable"></tbody>
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">ปริมาณแพ็กเก็ต (Real-time)</div>
+      <div style="position:relative;height:180px;"><canvas id="lineChart" role="img" aria-label="กราฟเส้นแสดงปริมาณแพ็กเก็ตต่อวินาทีแบบ real-time">กราฟแสดงจำนวนแพ็กเก็ตต่อวินาที</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">สัดส่วนการเข้ารหัส</div>
+      <div style="position:relative;height:130px;margin-bottom:8px;"><canvas id="donutChart" role="img" aria-label="กราฟโดนัทแสดงสัดส่วน Encrypted vs Unencrypted">กราฟแสดงสัดส่วนการเข้ารหัส</canvas></div>
+      <div style="display:flex;gap:12px;justify-content:center;font-size:11px;color:var(--color-text-secondary);">
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#1d9e75;display:inline-block;"></span>Encrypted</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:#e24b4a;display:inline-block;"></span>Unencrypted</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-row2">
+    <div class="chart-card">
+      <div class="chart-title">โปรโตคอล</div>
+      <div style="position:relative;height:160px;"><canvas id="barChart" role="img" aria-label="กราฟแท่งแสดงสัดส่วนแต่ละโปรโตคอล">สัดส่วนโปรโตคอล HTTPS TCP DNS SSH HTTP</canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">การแจ้งเตือนความปลอดภัย</div>
+      <div id="alerts-box">
+        <div class="alert-info"><span class="alert-icon">ℹ</span><div>กำลังรอข้อมูล...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <span class="chart-title" style="margin:0;">แพ็กเก็ตล่าสุด</span>
+      <div class="filter-row" id="filter-row">
+        <button class="filter-btn active" onclick="setFilter('ALL',this)">ทั้งหมด</button>
+        <button class="filter-btn" onclick="setFilter('HTTPS',this)">HTTPS</button>
+        <button class="filter-btn" onclick="setFilter('HTTP',this)">HTTP</button>
+        <button class="filter-btn" onclick="setFilter('DNS',this)">DNS</button>
+        <button class="filter-btn" onclick="setFilter('SSH',this)">SSH</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>#</th><th>เวลา</th><th>Source IP</th><th>Dest IP</th><th>Protocol</th><th>Port</th><th>ขนาด (bytes)</th><th>TLS</th><th>สถานะ</th>
+      </tr></thead>
+      <tbody id="packet-table"></tbody>
     </table>
   </div>
+</div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-const socket = io("http://localhost:3000");
+let running = true;
+let totalPkts = 0, encPkts = 0, noencPkts = 0;
+let pktId = 1;
+let currentFilter = 'ALL';
+let packets = [];
+const MAX_ROWS = 20;
 
-// 🔹 State
-let total = 0;
-let encrypted = 0;
-let unencrypted = 0;
-let packetsPerSecond = [];
-let labels = [];
-let protocolCount = {
-  TCP: 0,
-  UDP: 0,
-  HTTP: 0,
-  HTTPS: 0
-};
-let packetList = [];
+const PROTOCOLS = ['HTTPS','HTTPS','HTTPS','HTTPS','HTTP','DNS','SSH','TCP','HTTPS','HTTPS'];
+const TLS_VER = ['TLS 1.3','TLS 1.2','TLS 1.3',null,'TLS 1.3','TLS 1.2'];
+const PORTS = {HTTPS:443,HTTP:80,DNS:53,SSH:22,TCP:8080};
+const IP_POOL = ['192.168.1.','10.0.0.','172.16.0.','203.150.'];
+function randIP(pool) { return pool[Math.floor(Math.random()*pool.length)] + (Math.floor(Math.random()*250)+2); }
+function randTLS(proto) { if(proto==='HTTPS'||proto==='SSH') return TLS_VER[Math.floor(Math.random()*3)]; if(proto==='HTTP') return null; return null; }
 
-// 🔹 Charts Setup
-const lineChart = new Chart(document.getElementById("lineChart"), {
-  type: "line",
-  data: {
-    labels: labels,
-    datasets: [{
-      label: "Packets/sec",
-      data: packetsPerSecond,
-      borderColor: "cyan"
-    }]
+const lineLabels = Array.from({length:30},(_,i)=>'');
+const lineData = Array.from({length:30},()=>0);
+
+const lineCtx = document.getElementById('lineChart').getContext('2d');
+const lineChart = new Chart(lineCtx, {
+  type: 'line',
+  data: { labels: lineLabels, datasets: [{
+    label: 'Packets/sec',
+    data: lineData,
+    borderColor: '#378add',
+    backgroundColor: 'rgba(55,138,221,0.08)',
+    borderWidth: 1.5,
+    pointRadius: 0,
+    fill: true,
+    tension: 0.4
+  }]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { display: false }, grid: { color: 'rgba(128,128,128,0.1)' } },
+      y: { min: 0, ticks: { font: { size: 10 } }, grid: { color: 'rgba(128,128,128,0.1)' } }
+    }
   }
 });
 
-const pieChart = new Chart(document.getElementById("pieChart"), {
-  type: "pie",
-  data: {
-    labels: ["Encrypted", "Unencrypted"],
-    datasets: [{
-      data: [0, 0],
-      backgroundColor: ["green", "red"]
-    }]
+const donutCtx = document.getElementById('donutChart').getContext('2d');
+const donutChart = new Chart(donutCtx, {
+  type: 'doughnut',
+  data: { labels: ['Encrypted','Unencrypted'], datasets: [{ data: [1,1], backgroundColor: ['#1d9e75','#e24b4a'], borderWidth: 0 }]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: false,
+    plugins: { legend: { display: false } },
+    cutout: '70%'
   }
 });
 
-const barChart = new Chart(document.getElementById("barChart"), {
-  type: "bar",
+const barCtx = document.getElementById('barChart').getContext('2d');
+const protoCounts = {HTTPS:0,HTTP:0,DNS:0,SSH:0,TCP:0};
+const barChart = new Chart(barCtx, {
+  type: 'bar',
   data: {
-    labels: ["TCP", "UDP", "HTTP", "HTTPS"],
-    datasets: [{
-      label: "Protocols",
-      data: [0, 0, 0, 0],
-      backgroundColor: "orange"
-    }]
+    labels: ['HTTPS','HTTP','DNS','SSH','TCP'],
+    datasets: [{ data: [0,0,0,0,0], backgroundColor: ['#1d9e75','#e24b4a','#378add','#534ab7','#888780'], borderRadius: 3, borderWidth: 0 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+      y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(128,128,128,0.1)' } }
+    }
   }
 });
 
-// 🔹 Functions
-function updateSummary() {
-  document.getElementById("totalPackets").innerText = total;
-  document.getElementById("encryptedPackets").innerText = encrypted;
-  document.getElementById("unencryptedPackets").innerText = unencrypted;
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('th-TH');
+}
+setInterval(updateClock, 1000); updateClock();
+
+const ALERT_TEMPLATES = [
+  { type:'danger', msg:'พบการสื่อสาร HTTP ที่ไม่เข้ารหัส (Port 80)' },
+  { type:'warn', msg:'พบ TLS 1.2 — แนะนำให้อัปเกรดเป็น TLS 1.3' },
+  { type:'warn', msg:'ปริมาณ traffic สูงกว่าปกติ' },
+  { type:'danger', msg:'พบ Port Scan จาก 10.0.0.45' },
+  { type:'info', msg:'Certificate ใกล้หมดอายุใน 14 วัน' },
+];
+let alertIdx = 0;
+let alertShown = [];
+
+function addAlert() {
+  if(alertShown.length >= 3) alertShown.shift();
+  alertShown.push(ALERT_TEMPLATES[alertIdx % ALERT_TEMPLATES.length]);
+  alertIdx++;
+  const box = document.getElementById('alerts-box');
+  box.innerHTML = alertShown.map(a => `
+    <div class="alert-row alert-${a.type}" style="margin-bottom:6px;">
+      <span class="alert-icon">${a.type==='danger'?'✕':a.type==='warn'?'△':'ℹ'}</span>
+      <div>${a.msg}</div>
+    </div>
+  `).join('');
 }
 
-function updateLineChart() {
-  const now = new Date().toLocaleTimeString();
-  labels.push(now);
-  packetsPerSecond.push(1);
-
-  if (labels.length > 10) {
-    labels.shift();
-    packetsPerSecond.shift();
-  }
-
-  lineChart.update();
+function protoClass(p) {
+  const m = {HTTPS:'pill-https',HTTP:'pill-http',DNS:'pill-dns',SSH:'pill-ssh',TCP:'pill-tcp'};
+  return m[p]||'pill-tcp';
 }
 
-function updatePieChart() {
-  pieChart.data.datasets[0].data = [encrypted, unencrypted];
-  pieChart.update();
+function genPacket() {
+  const proto = PROTOCOLS[Math.floor(Math.random()*PROTOCOLS.length)];
+  const tls = randTLS(proto);
+  const enc = tls !== null;
+  const srcPool = IP_POOL[Math.floor(Math.random()*IP_POOL.length)];
+  const dstPool = IP_POOL[Math.floor(Math.random()*IP_POOL.length)];
+  return {
+    id: pktId++,
+    time: new Date().toLocaleTimeString('th-TH'),
+    src: randIP([srcPool]),
+    dst: randIP([dstPool]),
+    proto,
+    port: PORTS[proto]||(Math.floor(Math.random()*10000)+1024),
+    size: Math.floor(Math.random()*1400)+40,
+    tls: tls||'-',
+    enc
+  };
 }
 
-function updateBarChart() {
-  barChart.data.datasets[0].data = [
-    protocolCount.TCP,
-    protocolCount.UDP,
-    protocolCount.HTTP,
-    protocolCount.HTTPS
-  ];
-  barChart.update();
+function renderTable() {
+  const tbody = document.getElementById('packet-table');
+  const filtered = currentFilter==='ALL' ? packets : packets.filter(p=>p.proto===currentFilter);
+  tbody.innerHTML = filtered.slice(0,MAX_ROWS).map(p=>`
+    <tr>
+      <td>${p.id}</td>
+      <td>${p.time}</td>
+      <td>${p.src}</td>
+      <td>${p.dst}</td>
+      <td><span class="pill ${protoClass(p.proto)}">${p.proto}</span></td>
+      <td>${p.port}</td>
+      <td>${p.size}</td>
+      <td>${p.tls}</td>
+      <td><span class="pill ${p.enc?'pill-enc':'pill-noenc'}">${p.enc?'Encrypted':'Unencrypted'}</span></td>
+    </tr>
+  `).join('');
 }
 
-function updateTable(packet) {
-  packetList.unshift(packet);
-  if (packetList.length > 15) packetList.pop();
+let tickCount = 0;
+function tick() {
+  if(!running) return;
+  const burst = Math.floor(Math.random()*18)+3;
+  let newPkts = [];
+  for(let i=0;i<burst;i++) newPkts.push(genPacket());
 
-  const table = document.getElementById("packetTable");
-  table.innerHTML = "";
-
-  packetList.forEach(p => {
-    const row = `
-      <tr>
-        <td>${p.time}</td>
-        <td>${p.srcIP}</td>
-        <td>${p.dstIP}</td>
-        <td>${p.protocol}</td>
-        <td>${p.encrypted ? "Yes" : "No"}</td>
-      </tr>
-    `;
-    table.innerHTML += row;
+  let e=0,n=0;
+  newPkts.forEach(p => {
+    if(p.enc) e++; else n++;
+    protoCounts[p.proto] = (protoCounts[p.proto]||0)+1;
   });
+  totalPkts += burst; encPkts += e; noencPkts += n;
+
+  packets = [...newPkts, ...packets].slice(0,200);
+
+  document.getElementById('pps').textContent = burst;
+  document.getElementById('total').textContent = totalPkts.toLocaleString();
+  const ep = totalPkts>0 ? Math.round(encPkts/totalPkts*100) : 0;
+  const np = 100-ep;
+  document.getElementById('enc-pct').textContent = ep+'%';
+  document.getElementById('noenc-pct').textContent = np+'%';
+  document.getElementById('enc-count').textContent = encPkts.toLocaleString()+' แพ็กเก็ต';
+  document.getElementById('noenc-count').textContent = noencPkts.toLocaleString()+' แพ็กเก็ต';
+
+  lineData.push(burst); lineData.shift();
+  lineChart.update('none');
+
+  donutChart.data.datasets[0].data = [encPkts, noencPkts];
+  donutChart.update('none');
+
+  barChart.data.datasets[0].data = ['HTTPS','HTTP','DNS','SSH','TCP'].map(k=>protoCounts[k]||0);
+  barChart.update('none');
+
+  renderTable();
+  tickCount++;
+  if(tickCount % 8 === 0) addAlert();
 }
 
-// 🔹 Receive Packet
-socket.on("packet", (packet) => {
-  total++;
+let interval = setInterval(tick, 800);
+setTimeout(addAlert, 1200);
 
-  if (packet.encrypted) encrypted++;
-  else unencrypted++;
+function toggleCapture(btn) {
+  running = !running;
+  btn.textContent = running ? 'หยุดดักจับ' : 'เริ่มดักจับ';
+  if(running) interval = setInterval(tick, 800);
+  else clearInterval(interval);
+}
 
-  if (protocolCount[packet.protocol] !== undefined) {
-    protocolCount[packet.protocol]++;
-  }
-
-  updateSummary();
-  updateLineChart();
-  updatePieChart();
-  updateBarChart();
-  updateTable(packet);
-});
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
+}
 </script>
-
-</body>
-</html>
