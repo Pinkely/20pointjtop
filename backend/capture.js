@@ -13,35 +13,75 @@ let stats = {
 let statsTimer = null;
 let packetId = 0;
 
-function normalizeProtocol(proto) {
-  if (!proto) return 'OTHER';
-  const p = proto.toUpperCase();
-  if (p.includes('TLS') || p.includes('HTTPS')) return 'HTTPS';
-  if (p.includes('SSH')) return 'SSH';
+const ENCRYPTED_PORTS = new Set([443, 8443, 465, 993, 995, 587]);
+const SSH_PORTS = new Set([22]);
+
+function toPort(value) {
+  const p = parseInt(value, 10);
+  return Number.isNaN(p) ? null : p;
+}
+
+function isEncryptedPort(srcPort, dstPort) {
+  const src = toPort(srcPort);
+  const dst = toPort(dstPort);
+  return (src && (ENCRYPTED_PORTS.has(src) || SSH_PORTS.has(src))) ||
+         (dst && (ENCRYPTED_PORTS.has(dst) || SSH_PORTS.has(dst)));
+}
+
+function normalizeProtocol(proto, srcPort, dstPort, tlsVer) {
+  const p = proto ? proto.toUpperCase() : '';
+  const src = toPort(srcPort);
+  const dst = toPort(dstPort);
+
+  // 🔐 TLS จริง (แม่นสุด)
+  if (tlsVer && tlsVer !== '') return 'HTTPS';
+
+  // 🔐 HTTPS port
+  if (src === 443 || dst === 443) return 'HTTPS';
+
+  // 🔐 SSH
+  if (src === 22 || dst === 22) return 'SSH';
+
+  // 🌐 DNS
   if (p.includes('DNS')) return 'DNS';
+
+  // 🌐 HTTP
+  if (src === 80 || dst === 80) return 'HTTP';
+
+  // 🧠 protocol จาก tshark
   if (p.includes('HTTP')) return 'HTTP';
-  if (p.includes('TCP')) return 'TCP';
   if (p.includes('UDP')) return 'UDP';
   if (p.includes('ICMP')) return 'ICMP';
+
+  // TCP fallback
+  if (p.includes('TCP')) return 'TCP';
+
   return 'OTHER';
 }
 
-function isEncrypted(proto) {
-  if (!proto) return false;
-  const p = proto.toUpperCase();
-  return p.includes('TLS') || p.includes('HTTPS') || p.includes('SSH');
+function isEncrypted(proto, srcPort, dstPort, tlsVer) {
+  const src = toPort(srcPort);
+  const dst = toPort(dstPort);
+
+  if (tlsVer && tlsVer !== '') return true;
+  if (src === 443 || dst === 443) return true;
+  if (src === 22 || dst === 22) return true;
+
+  return false;
 }
 
-function tlsVersionFromProto(proto) {
-  if (!proto) return '-';
-  const p = proto.toUpperCase();
-  if (p.includes('TLS 1.3')) return 'TLS 1.3';
-  if (p.includes('TLS 1.2')) return 'TLS 1.2';
-  if (p.includes('TLS 1.1')) return 'TLS 1.1';
-  if (p.includes('TLS 1.0')) return 'TLS 1.0';
+function tlsVersionFromProto(proto, srcPort, dstPort) {
+  const p = proto ? proto.toUpperCase() : '';
+  if (p.includes('TLS 1.3') || p.includes('TLS1.3')) return 'TLS 1.3';
+  if (p.includes('TLS 1.2') || p.includes('TLS1.2')) return 'TLS 1.2';
+  if (p.includes('TLS 1.1') || p.includes('TLS1.1')) return 'TLS 1.1';
+  if (p.includes('TLS 1.0') || p.includes('TLS1.0')) return 'TLS 1.0';
   if (p.includes('SSL')) return 'SSL 3.0';
   if (p.includes('SSH')) return 'SSH-2.0';
   if (p.includes('HTTPS')) return 'TLS 1.3';
+  if (isEncryptedPort(srcPort, dstPort)) {
+    return SSH_PORTS.has(toPort(srcPort)) || SSH_PORTS.has(toPort(dstPort)) ? 'SSH-2.0' : 'TLS 1.3';
+  }
   return '-';
 }
 
@@ -85,14 +125,13 @@ function emitPacket(io, pkt) {
 }
 
 function parseLine(line) {
-  const [src, dst, tcpSrc, tcpDst, udpSrc, udpDst, proto, len] = line.split('\t');
+  const [src, dst, tcpSrc, tcpDst, udpSrc, udpDst, proto, tlsVer, len] = line.split('\t');
   if (!src || !dst) return null;
 
   const srcPort = tcpSrc || udpSrc || '-';
   const dstPort = tcpDst || udpDst || '-';
-  const protocol = normalizeProtocol(proto);
-  const encrypted = isEncrypted(proto);
-  const tlsVersion = tlsVersionFromProto(proto);
+  const protocol = normalizeProtocol(proto, srcPort, dstPort, tlsVer);
+  const encrypted = isEncrypted(proto, srcPort, dstPort, tlsVer);  const tlsVersion = tlsVersionFromProto(proto, srcPort, dstPort);
   const size = parseInt(len, 10) || 0;
 
   return {
@@ -123,22 +162,31 @@ function startTshark(io, iface = '5', filter = '') {
     '-e', 'udp.srcport',
     '-e', 'udp.dstport',
     '-e', '_ws.col.Protocol',
-    '-e', 'frame.len'
+    '-e', 'tcp.port',
+    '-e', 'tls.record.version',
+    '-e', 'frame.len',
+    '-e', 'tls.record.version'
   ];
-  if (filter) args.push('-Y', filter);
+  if (filter) args.push('-f', filter);
 
   tshark = spawn(tsharkPath, args, { windowsHide: true });
   capturing = true;
   currentIface = iface;
 
-  tshark.stdout.on('data', (data) => {
-    const lines = data.toString().split('\n');
-    lines.forEach((line) => {
-      if (!line.trim()) return;
-      const pkt = parseLine(line);
-      if (pkt) emitPacket(io, pkt);
-    });
+  let leftover = '';
+
+  
+tshark.stdout.on('data', (data) => {
+  const chunk = leftover + data.toString();
+  const lines = chunk.split('\n');
+  leftover = lines.pop(); // เก็บบรรทัดที่ไม่ครบ
+
+  lines.forEach((line) => {
+    if (!line.trim()) return;
+    const pkt = parseLine(line);
+    if (pkt) emitPacket(io, pkt);
   });
+});
 
   tshark.stderr.on('data', (err) => {
     console.error('[tshark]', err.toString());
@@ -159,16 +207,16 @@ function startTshark(io, iface = '5', filter = '') {
   emitStats(io);
 }
 
+const { exec } = require('child_process');
+
 function stopTshark() {
   capturing = false;
+
   if (tshark) {
-    try {
-      tshark.kill();
-    } catch (err) {
-      console.error('Failed to stop tshark:', err.message);
-    }
+    exec('taskkill /IM tshark.exe /F', () => {});
     tshark = null;
   }
+
   if (statsTimer) {
     clearInterval(statsTimer);
     statsTimer = null;
